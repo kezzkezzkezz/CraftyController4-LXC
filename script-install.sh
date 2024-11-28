@@ -5,9 +5,6 @@
 # License: MIT
 # https://github.com/kezzkezzkezz/CraftyController4-lxc/blob/main/LICENSE
 
-# Download build functions
-source <(curl -s https://raw.githubusercontent.com/kezzkezzkezz/CraftyController4-lxc/main/build.func)
-
 # Script initialization
 echo -e "Loading Crafty LXC Container Installation..."
 
@@ -28,26 +25,13 @@ catch_errors
 function default_settings() {
     CT_TYPE="1"               # Container type (1 = LXC)
     PASSWORD=""               # Optional password
-    CT_ID=$NEXTID             # Next available Container ID
-    HN=$NSAPP                 # Hostname
+    CT_ID=$NEXTID             # Next available Container ID (Ensure NEXTID is valid or hardcode)
+    HN="crafty-container"     # Use a valid DNS-compatible hostname
     DISK_SIZE="$var_disk"     # Disk size
     CORE_COUNT="$var_cpu"     # CPU cores
     RAM_SIZE="$var_ram"       # RAM size
     BRG="vmbr0"               # Bridge interface
     NET="dhcp"                # Network configuration
-    
-    # Additional optional settings
-    PORT=""
-    GATE=""
-    APT_CACHER=""
-    APT_CACHER_IP=""
-    DISABLEIP6="no"
-    MTU=""
-    SD=""
-    MAC=""
-    VLAN=""
-    SSH="no"
-    VERBOSE="no"
     
     # Display default settings
     echo_default
@@ -84,13 +68,10 @@ function install_crafty() {
 function build_container() {
     msg_info "Building LXC container..."
 
-    # Select LVM storage or use default
-    SELECTED_LVM=$(select_lvm)
-
-    # Create the container
-    pct create $CT_ID $SELECTED_LVM:vztmpl/debian-12-standard_12.7-1_amd64.tar.zst \
+    # Create the container without using select_lvm
+    pct create $CT_ID /var/lib/vz/template/cache/debian-12-standard_12.7-1_amd64.tar.zst \
         --hostname $HN \
-        --rootfs $SELECTED_LVM:$DISK_SIZE \
+        --rootfs /var/lib/vz/$DISK_SIZE \
         --cores $CORE_COUNT \
         --memory $RAM_SIZE \
         --net0 name=eth0,bridge=$BRG,ip=$NET
