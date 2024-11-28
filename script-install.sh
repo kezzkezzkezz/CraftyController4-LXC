@@ -1,115 +1,92 @@
-#!/bin/bash
+#!/usr/bin/env bash
+# Crafty LXC Container Installation Script
+# Copyright (c) 2024
+# Author: kezzkezzkezz
+# License: MIT
+# https://github.com/kezzkezzkezz/CraftyController4-lxc/blob/main/LICENSE
 
-# Crafty Controller 4 LXC One-Line Installation Script
+# Download build functions
+source <(curl -s https://raw.githubusercontent.com/kezzkezzkezz/CraftyController4-lxc/main/build.func)
 
-# Color codes
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-RED='\033[0;31m'
-NC='\033[0m' # No Color
+# Script initialization
+echo -e "Loading Crafty LXC Container Installation..."
 
-# Function to log messages
-log() {
-    echo -e "${GREEN}[CRAFTY INSTALLER]${NC} $1"
+# Application and container configuration
+APP="Crafty"
+var_disk="20"     # Disk size in GB
+var_cpu="2"       # Number of CPU cores
+var_ram="2048"    # RAM in MB
+var_os="debian"   # Operating system
+var_version="12"  # OS version
+
+# Call core functions
+variables
+color
+catch_errors
+
+# Default container settings function
+function default_settings() {
+    CT_TYPE="1"               # Container type (1 = LXC)
+    PASSWORD=""               # Optional password
+    CT_ID=$NEXTID             # Next available Container ID
+    HN=$NSAPP                 # Hostname
+    DISK_SIZE="$var_disk"     # Disk size
+    CORE_COUNT="$var_cpu"     # CPU cores
+    RAM_SIZE="$var_ram"       # RAM size
+    BRG="vmbr0"               # Bridge interface
+    NET="dhcp"                # Network configuration
+    
+    # Additional optional settings
+    PORT=""
+    GATE=""
+    APT_CACHER=""
+    APT_CACHER_IP=""
+    DISABLEIP6="no"
+    MTU=""
+    SD=""
+    MAC=""
+    VLAN=""
+    SSH="no"
+    VERBOSE="no"
+    
+    # Display default settings
+    echo_default
 }
 
-# Function to log warnings
-warn() {
-    echo -e "${YELLOW}[CRAFTY INSTALLER - WARNING]${NC} $1"
-}
-
-# Function to log errors
-error() {
-    echo -e "${RED}[CRAFTY INSTALLER - ERROR]${NC} $1"
-    exit 1
-}
-
-# Ensure script is run as root
-if [[ $EUID -ne 0 ]]; then
-   error "This script must be run as root. Use sudo or run as root."
-fi
-
-# Main installation function
-install_crafty() {
-    # Update system
-    log "Updating system packages..."
-    apt-get update || error "Failed to update package lists"
-    apt-get upgrade -y || warn "System upgrade encountered issues"
-
-    # Install core dependencies
-    log "Installing required dependencies..."
-    apt-get install -y \
+# Crafty installation function
+function install_crafty() {
+    msg_info "Installing Crafty in the LXC container"
+    
+    # Update and upgrade packages
+    pct exec $CT_ID -- bash -c "apt update && apt upgrade -y"
+    
+    # Install required dependencies
+    pct exec $CT_ID -- bash -c "apt install -y \
         git \
-        curl \
         wget \
-        unzip \
+        curl \
+        openjdk-21-jdk \
         python3 \
         python3-pip \
-        python3-venv \
-        python3-dev \
-        build-essential \
-        || error "Failed to install dependencies"
-
-    # Create crafty user and directory
-    log "Setting up Crafty user and installation directory..."
-    useradd -m -s /bin/bash crafty 2>/dev/null
-    mkdir -p /opt/crafty
-    chown -R crafty:crafty /opt/crafty
-
-    # Perform installation as crafty user
-    sudo -u crafty bash << EOF
-    cd /opt/crafty
-
-    # Create and activate virtual environment
-    python3 -m venv crafty-env
-    source crafty-env/bin/activate
-
-    # Clone Crafty Controller
-    git clone https://gitlab.com/crafty-controller/crafty-4.git .
-
-    # Install Python dependencies
-    pip install --upgrade pip
-    pip install -r requirements.txt
-
-    # Deactivate virtual environment
-    deactivate
-EOF
-
-    # Create systemd service
-    log "Creating Crafty systemd service..."
-    cat << SYSTEMD > /etc/systemd/system/crafty.service
-[Unit]
-Description=Crafty Controller 4
-After=network.target
-
-[Service]
-Type=simple
-User=crafty
-Group=crafty
-WorkingDirectory=/opt/crafty
-ExecStart=/opt/crafty/crafty-env/bin/python3 /opt/crafty/crafty/crafty.py
-Restart=on-failure
-
-[Install]
-WantedBy=multi-user.target
-SYSTEMD
-
-    # Reload and start service
-    systemctl daemon-reload
-    systemctl enable crafty.service
-    systemctl start crafty.service
-
-    # Configure firewall if UFW is available
-    if command -v ufw &> /dev/null; then
-        log "Configuring UFW firewall..."
-        ufw allow 8443/tcp
-    fi
-
-    # Final success message
-    echo -e "\n${GREEN}✔ Crafty Controller 4 Installation Complete!${NC}"
-    echo -e "${YELLOW}Web Interface: https://[SERVER_IP]:8443${NC}"
-    echo -e "${RED}IMPORTANT: Change default credentials immediately after first login!${NC}"
+        python3-venv"
+    
+    # Clone and run Crafty installer
+    pct exec $CT_ID -- bash -c "
+        git clone https://gitlab.com/crafty-controller/crafty-installer-4.0.git &&
+        cd crafty-installer-4.0 &&
+        sudo ./install_crafty.sh
+    "
+    
+    msg_ok "Crafty successfully installed"
 }
 
-# Run the installation
+# Main installation process
+start
+build_container
+default_settings
+description
 install_crafty
+
+# Final messages
+msg_ok "Crafty LXC Container Installation Completed Successfully!\n"
+echo -e "${APP} should be accessible once configured and started.\n"
