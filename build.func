@@ -40,15 +40,46 @@ start() {
     msg_info "Starting the setup process..."
 }
 
+select_lvm() {
+    # List available LVMs
+    msg_info "Fetching available LVMs..."
+    LVM_LIST=$(lsblk -o NAME,MOUNTPOINT | grep "lvm" | awk '{print $1}')
+
+    if [[ -z "$LVM_LIST" ]]; then
+        msg_error "No LVM volumes found. Please ensure LVM is set up correctly."
+        exit 1
+    fi
+
+    # Prompt the user to select an LVM
+    msg_info "Please select an LVM to install the container on:"
+    select LVM_CHOICE in $LVM_LIST; do
+        if [[ -n "$LVM_CHOICE" ]]; then
+            msg_ok "You selected $LVM_CHOICE for the LXC container."
+            break
+        else
+            msg_error "Invalid selection. Please choose a valid LVM."
+        fi
+    done
+
+    # Return the selected LVM volume
+    echo $LVM_CHOICE
+}
+
 build_container() {
+    # Prompt for LVM selection
+    SELECTED_LVM=$(select_lvm)
+
     msg_info "Building LXC container..."
     pct create $CT_ID local:vztmpl/debian-12-standard_12.7-1_amd64.tar.zst \
-        --hostname $NSAPP --rootfs local-lvm:$DISK_SIZE_DEFAULT \
-        --cores $CORE_COUNT_DEFAULT --memory $RAM_SIZE_DEFAULT \
+        --hostname $NSAPP \
+        --rootfs $SELECTED_LVM:$DISK_SIZE_DEFAULT \
+        --cores $CORE_COUNT_DEFAULT \
+        --memory $RAM_SIZE_DEFAULT \
         --net0 name=eth0,bridge=$BRG_DEFAULT,ip=$NET_DEFAULT
     pct start $CT_ID
     msg_ok "Container built successfully."
 }
+
 
 display_default_settings() {
     msg_info "Default settings applied:"
