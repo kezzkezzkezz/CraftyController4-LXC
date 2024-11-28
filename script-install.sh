@@ -16,10 +16,47 @@ var_ram="2048"    # RAM in MB
 var_os="debian"   # Operating system
 var_version="12"  # OS version
 
-# Call core functions
-variables
-color
-catch_errors
+# Core functions
+
+variables() {
+    NSAPP="${APP:-UnknownApp}"
+    NEXTID=$(pvesh get /cluster/nextid)
+}
+
+color() {
+    RED='\033[0;31m'
+    GREEN='\033[0;32m'
+    YELLOW='\033[1;33m'
+    BLUE='\033[0;34m'
+    NC='\033[0m' # No Color
+}
+
+catch_errors() {
+    trap 'error_handler $LINENO' ERR
+}
+
+error_handler() {
+    local line_number=$1
+    echo -e "${RED}[ERROR]${NC} An error occurred on line $line_number"
+    echo -e "${YELLOW}[WARN]${NC} Command that failed: $BASH_COMMAND"
+    exit 1
+}
+
+msg_info() {
+    echo -e "${YELLOW}[INFO]${NC} $1"
+}
+
+msg_ok() {
+    echo -e "${GREEN}[OK]${NC} $1"
+}
+
+msg_error() {
+    echo -e "${RED}[ERROR]${NC} $1"
+}
+
+msg_warn() {
+    echo -e "${YELLOW}[WARN]${NC} $1"
+}
 
 # Default container settings function
 function default_settings() {
@@ -82,10 +119,23 @@ function build_container() {
 }
 
 # Main installation process
+start() {
+    # Ensure script is run as root
+    if [[ $EUID -ne 0 ]]; then
+        msg_error "This script must be run as root"
+        exit 1
+    fi
+    
+    msg_info "Initializing ${APP:-Application} LXC Container Installation"
+}
+
+# Run the installation steps
 start
+variables
+color
+catch_errors
 build_container
 default_settings
-description
 install_crafty
 
 # Final messages
