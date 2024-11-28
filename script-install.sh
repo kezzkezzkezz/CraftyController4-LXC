@@ -16,15 +16,44 @@ var_ram="2048"    # RAM in MB
 var_os="debian"   # Operating system
 var_version="12"  # OS version
 
-# Call core functions
-variables
-color
-catch_errors
+# Placeholder functions (for now)
+variables() {
+  NEXTID=$(pvesh get /nodes/gigabirtha/lxc | jq '.[] | .vmid' | sort -n | tail -n 1)
+  NEXTID=$((NEXTID+1))
+}
 
-# Function to list available LVM thin volumes
-list_available_thin_volumes() {
-    echo "Available LVM Thin Volumes:"
-    lvs --noheadings -o vg_name,lv_name,lv_size,lv_attr --columns lv_name,lv_size --select lv_attr=io--t
+color() {
+  # Placeholder for color output
+  GREEN='\033[0;32m'
+  NC='\033[0m' # No Color
+}
+
+catch_errors() {
+  # Simple error handling function
+  trap 'echo -e "${RED}An error occurred. Exiting.${NC}"' ERR
+}
+
+msg_info() {
+  echo -e "${GREEN}INFO: $1${NC}"
+}
+
+msg_ok() {
+  echo -e "${GREEN}OK: $1${NC}"
+}
+
+echo_default() {
+  # Just a placeholder to show settings
+  echo -e "Container ID: $CT_ID"
+  echo -e "Hostname: $HN"
+  echo -e "Disk Size: $DISK_SIZE"
+  echo -e "CPU: $CORE_COUNT cores"
+  echo -e "RAM: $RAM_SIZE MB"
+}
+
+# Function to list available LVM volume groups
+list_available_vgs() {
+    echo "Available LVM Volume Groups:"
+    vgs --noheadings -o vg_name
 }
 
 # Function to select LVM or standard disk setup
@@ -38,36 +67,27 @@ select_disk_setup() {
             exit 1
         fi
         DISK_TYPE="lvm"
-        DISK_PATH="${selected_vg}:${DISK_SIZE}"
+        DISK_PATH="${selected_vg}:${DISK_SIZE}G"
     else
         DISK_TYPE="standard"
-        DISK_PATH="local:${DISK_SIZE}"
+        DISK_PATH="local:${DISK_SIZE}G"
     fi
 }
 
-# Get the next available container ID
-CT_ID=$(pct nextid)
-
-# Default container settings
+# Default container settings function
 function default_settings() {
     CT_TYPE="1"               # Container type (1 = LXC)
     PASSWORD=""               # Optional password
-    CT_ID="$CT_ID"            # Container ID
+    CT_ID=$NEXTID             # Next available Container ID
     HN="crafty-container"     # Use a valid DNS-compatible hostname
     DISK_SIZE="$var_disk"     # Disk size
     CORE_COUNT="$var_cpu"     # CPU cores
     RAM_SIZE="$var_ram"       # RAM size
     BRG="vmbr0"               # Bridge interface
     NET="dhcp"                # Network configuration
-    DISK_PATH="/dev/$selected_vg/lv_name"   # Modify for your LVM or standard path
     
     # Display default settings
-    echo "Container will be created with the following settings:"
-    echo "Hostname: $HN"
-    echo "Disk Size: $DISK_SIZE"
-    echo "CPU Cores: $CORE_COUNT"
-    echo "RAM Size: $RAM_SIZE"
-    echo "Network: $NET"
+    echo_default
 }
 
 # Crafty installation function
@@ -97,7 +117,7 @@ function install_crafty() {
     msg_ok "Crafty successfully installed"
 }
 
-# Container creation command
+# Build the container
 function build_container() {
     select_disk_setup
     pct create $CT_ID /var/lib/vz/template/cache/debian-12-standard_12.7-1_amd64.tar.zst \
@@ -105,16 +125,17 @@ function build_container() {
     --rootfs $DISK_PATH \
     --cores $CORE_COUNT \
     --memory $RAM_SIZE \
-    --net0 bridge=$BRG,ip=$NET
+    --net0 bridge=vmbr0,ip=dhcp
     pct start $CT_ID
-    echo "Container built successfully."
+    msg_ok "Container built successfully."
 }
 
 # Main installation process
-start
+variables
+color
+catch_errors
 build_container
 default_settings
-description
 install_crafty
 
 # Final messages
