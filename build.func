@@ -58,3 +58,24 @@ description() {
     pct set $NEXTID -description "LXC container for $NSAPP on Proxmox."
     msg_ok "Description set."
 }
+
+function finish_setup() {
+    # Enable auto-start for the container
+    msg_info "Enabling auto-start for LXC container..."
+    pct set $CT_ID --onboot 1
+    msg_ok "Auto-start enabled."
+
+    # Fetch and display container's IP address
+    msg_info "Fetching container IP address..."
+    IP=$(pct exec $CT_ID -- ip -4 addr show eth0 | grep -oP '(?<=inet\s)\d+(\.\d+){3}')
+    if [[ -z "$IP" ]]; then
+        IP="(Unable to fetch IP, check container networking)"
+        msg_warn "Could not retrieve IP address."
+    fi
+    msg_ok "Container IP address: $IP"
+
+    # Output access information for Crafty
+    msg_info "Crafty Installation Completed!"
+    echo -e "Access Crafty Controller at: http://${IP}:8000"
+    echo -e "Make sure to configure Crafty as needed."
+}
