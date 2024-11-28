@@ -21,10 +21,10 @@ variables
 color
 catch_errors
 
-# Function to list available LVM volume groups
-list_available_vgs() {
-    echo "Available LVM Volume Groups:"
-    vgs --noheadings -o vg_name
+# Function to list available LVM thin volumes
+list_available_thin_volumes() {
+    echo "Available LVM Thin Volumes:"
+    lvs --noheadings -o vg_name,lv_name,lv_size,lv_attr --columns lv_name,lv_size --select lv_attr=io--t
 }
 
 # Function to select LVM or standard disk setup
