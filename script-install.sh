@@ -1,61 +1,83 @@
 #!/bin/bash
 
-# Crafty Controller 4 Installation Script for LXC
-# Tested on Debian/Ubuntu-based systems
+# Crafty Controller 4 LXC One-Line Installation Script
+
+# Color codes
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+RED='\033[0;31m'
+NC='\033[0m' # No Color
+
+# Function to log messages
+log() {
+    echo -e "${GREEN}[CRAFTY INSTALLER]${NC} $1"
+}
+
+# Function to log warnings
+warn() {
+    echo -e "${YELLOW}[CRAFTY INSTALLER - WARNING]${NC} $1"
+}
+
+# Function to log errors
+error() {
+    echo -e "${RED}[CRAFTY INSTALLER - ERROR]${NC} $1"
+    exit 1
+}
 
 # Ensure script is run as root
 if [[ $EUID -ne 0 ]]; then
-   echo "This script must be run as root" 
-   exit 1
+   error "This script must be run as root. Use sudo or run as root."
 fi
 
-# Update system packages
-echo "Updating system packages..."
-apt-get update && apt-get upgrade -y
+# Main installation function
+install_crafty() {
+    # Update system
+    log "Updating system packages..."
+    apt-get update || error "Failed to update package lists"
+    apt-get upgrade -y || warn "System upgrade encountered issues"
 
-# Install required dependencies
-echo "Installing required dependencies..."
-apt-get install -y \
-    git \
-    python3 \
-    python3-pip \
-    python3-venv \
-    wget \
-    curl \
-    unzip \
-    software-properties-common
+    # Install core dependencies
+    log "Installing required dependencies..."
+    apt-get install -y \
+        git \
+        curl \
+        wget \
+        unzip \
+        python3 \
+        python3-pip \
+        python3-venv \
+        python3-dev \
+        build-essential \
+        || error "Failed to install dependencies"
 
-# Create Crafty user and directory
-echo "Creating Crafty user and installation directory..."
-useradd -m -s /bin/bash crafty
-mkdir -p /opt/crafty
-chown -R crafty:crafty /opt/crafty
+    # Create crafty user and directory
+    log "Setting up Crafty user and installation directory..."
+    useradd -m -s /bin/bash crafty 2>/dev/null
+    mkdir -p /opt/crafty
+    chown -R crafty:crafty /opt/crafty
 
-# Switch to crafty user for installation
-sudo -u crafty bash << EOF
+    # Perform installation as crafty user
+    sudo -u crafty bash << EOF
+    cd /opt/crafty
 
-# Change to Crafty installation directory
-cd /opt/crafty
+    # Create and activate virtual environment
+    python3 -m venv crafty-env
+    source crafty-env/bin/activate
 
-# Create Python virtual environment
-python3 -m venv crafty-env
+    # Clone Crafty Controller
+    git clone https://gitlab.com/crafty-controller/crafty-4.git .
 
-# Activate virtual environment
-source crafty-env/bin/activate
+    # Install Python dependencies
+    pip install --upgrade pip
+    pip install -r requirements.txt
 
-# Clone Crafty Controller 4
-git clone https://gitlab.com/crafty-controller/crafty-4.git .
-
-# Install Python dependencies
-pip install -r requirements.txt
-
-# Deactivate virtual environment
-deactivate
+    # Deactivate virtual environment
+    deactivate
 EOF
 
-# Set up systemd service
-echo "Creating systemd service for Crafty Controller..."
-cat << SYSTEMD > /etc/systemd/system/crafty.service
+    # Create systemd service
+    log "Creating Crafty systemd service..."
+    cat << SYSTEMD > /etc/systemd/system/crafty.service
 [Unit]
 Description=Crafty Controller 4
 After=network.target
@@ -63,6 +85,7 @@ After=network.target
 [Service]
 Type=simple
 User=crafty
+Group=crafty
 WorkingDirectory=/opt/crafty
 ExecStart=/opt/crafty/crafty-env/bin/python3 /opt/crafty/crafty/crafty.py
 Restart=on-failure
@@ -71,21 +94,22 @@ Restart=on-failure
 WantedBy=multi-user.target
 SYSTEMD
 
-# Reload systemd, enable and start Crafty service
-systemctl daemon-reload
-systemctl enable crafty.service
-systemctl start crafty.service
+    # Reload and start service
+    systemctl daemon-reload
+    systemctl enable crafty.service
+    systemctl start crafty.service
 
-# Open firewall ports (if UFW is installed)
-# Crafty typically uses port 8443 for web interface
-echo "Configuring firewall (if available)..."
-if command -v ufw &> /dev/null; then
-    ufw allow 8443/tcp
-fi
+    # Configure firewall if UFW is available
+    if command -v ufw &> /dev/null; then
+        log "Configuring UFW firewall..."
+        ufw allow 8443/tcp
+    fi
 
-echo "Crafty Controller 4 installation complete!"
-echo "Access the web interface at https://[YOUR_IP]:8443"
-echo "Default credentials will be displayed in the first-time setup"
+    # Final success message
+    echo -e "\n${GREEN}✔ Crafty Controller 4 Installation Complete!${NC}"
+    echo -e "${YELLOW}Web Interface: https://[SERVER_IP]:8443${NC}"
+    echo -e "${RED}IMPORTANT: Change default credentials immediately after first login!${NC}"
+}
 
-# Recommend user to change default credentials
-echo "IMPORTANT: Change default credentials after first login!"
+# Run the installation
+install_crafty
