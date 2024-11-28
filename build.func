@@ -32,16 +32,12 @@ start() {
     msg_info "Starting the setup process..."
 }
 
-build_container() {
+function build_container() {
     msg_info "Building LXC container..."
-    # Example of container creation (Proxmox `pct` commands)
-    pct create $NEXTID local:vztmpl/debian-12-standard_12.7-1_amd64.tar.zst \
-        -storage local-lvm \
-        -hostname $NSAPP \
-        -cores $CORE_COUNT_DEFAULT \
-        -memory $RAM_SIZE_DEFAULT \
-        -net0 name=eth0,bridge=$BRG_DEFAULT,ip=$NET_DEFAULT \
-        -rootfs $DISK_SIZE_DEFAULT
+    pct create $CT_ID local:vztmpl/debian-12-standard_12.7-1_amd64.tar.zst \
+        --hostname $HN --rootfs local-lvm:$DISK_SIZE \
+        --cores $CORE_COUNT --memory $RAM_SIZE --net0 name=eth0,bridge=$BRG,ip=$NET
+    pct start $CT_ID
     msg_ok "Container built successfully."
 }
 
