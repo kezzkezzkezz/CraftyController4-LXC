@@ -1,1 +1,60 @@
+variables() {
+    NSAPP="Crafty"
+    NEXTID=$(pvesh get /cluster/nextid)
+    DISK_SIZE_DEFAULT="20"
+    CORE_COUNT_DEFAULT="2"
+    RAM_SIZE_DEFAULT="2048"
+    BRG_DEFAULT="vmbr0"
+    NET_DEFAULT="dhcp"
+}
 
+color() {
+    RED='\033[0;31m'
+    GREEN='\033[0;32m'
+    YELLOW='\033[1;33m'
+    NC='\033[0m' # No Color
+}
+msg_info() {
+    echo -e "${YELLOW}[INFO]${NC} $1"
+}
+msg_ok() {
+    echo -e "${GREEN}[OK]${NC} $1"
+}
+msg_error() {
+    echo -e "${RED}[ERROR]${NC} $1"
+}
+
+catch_errors() {
+    trap 'msg_error "An error occurred. Exiting..."; exit 1' ERR
+}
+
+start() {
+    msg_info "Starting the setup process..."
+}
+
+build_container() {
+    msg_info "Building LXC container..."
+    # Example of container creation (Proxmox `pct` commands)
+    pct create $NEXTID local:vztmpl/debian-12-standard_12.0-1_amd64.tar.zst \
+        -storage local-lvm \
+        -hostname $NSAPP \
+        -cores $CORE_COUNT_DEFAULT \
+        -memory $RAM_SIZE_DEFAULT \
+        -net0 name=eth0,bridge=$BRG_DEFAULT,ip=$NET_DEFAULT \
+        -rootfs $DISK_SIZE_DEFAULT
+    msg_ok "Container built successfully."
+}
+
+echo_default() {
+    msg_info "Default settings applied:"
+    echo -e "  Hostname: $NSAPP"
+    echo -e "  Disk Size: ${DISK_SIZE_DEFAULT}GB"
+    echo -e "  CPU Cores: $CORE_COUNT_DEFAULT"
+    echo -e "  RAM: ${RAM_SIZE_DEFAULT}MB"
+}
+
+description() {
+    msg_info "Setting container description..."
+    pct set $NEXTID -description "LXC container for $NSAPP on Proxmox."
+    msg_ok "Description set."
+}
