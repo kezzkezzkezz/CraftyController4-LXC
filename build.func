@@ -90,18 +90,44 @@ build_container() {
         exit 1
     fi
     
-    # Default template if not specified
+    # Ask user for LVM selection
+    read -p "Do you want to use LVM for disk (y/n)? " use_lvm
+    if [[ "$use_lvm" =~ ^[Yy]$ ]]; then
+        msg_info "Using LVM for root filesystem."
+        DISK_TYPE="lvm"
+    else
+        msg_info "Using standard disk setup."
+        DISK_TYPE="standard"
+    fi
+    
+    # Validate template path
     local TEMPLATE="${var_os:-debian}-${var_version:-12}-standard_12.7-1_amd64.tar.zst"
     
+    if ! [ -f "/var/lib/vz/template/cache/$TEMPLATE" ]; then
+        msg_error "Template $TEMPLATE not found in /var/lib/vz/template/cache/"
+        exit 1
+    fi
+
     msg_info "Creating LXC container ${CT_ID}"
     
     # Create container with specified parameters
-    pct create "$CT_ID" "local:vztmpl/$TEMPLATE" \
-        -hostname "$HN" \
-        -rootfs "local:$DISK_SIZE" \
-        -cores "${CORE_COUNT:-2}" \
-        -memory "${RAM_SIZE:-2048}" \
-        -net0 "name=eth0,bridge=${BRG:-vmbr0},ip=${NET:-dhcp}"
+    if [[ "$DISK_TYPE" == "lvm" ]]; then
+        # If LVM is selected, set up LVM for the container
+        pct create "$CT_ID" "local:vztmpl/$TEMPLATE" \
+            -hostname "$HN" \
+            -rootfs "local-lvm:$DISK_SIZE" \
+            -cores "${CORE_COUNT:-2}" \
+            -memory "${RAM_SIZE:-2048}" \
+            -net0 "name=eth0,bridge=${BRG:-vmbr0},ip=${NET:-dhcp}"
+    else
+        # Default disk setup
+        pct create "$CT_ID" "local:vztmpl/$TEMPLATE" \
+            -hostname "$HN" \
+            -rootfs "local:$DISK_SIZE" \
+            -cores "${CORE_COUNT:-2}" \
+            -memory "${RAM_SIZE:-2048}" \
+            -net0 "name=eth0,bridge=${BRG:-vmbr0},ip=${NET:-dhcp}"
+    fi
     
     msg_ok "Container ${CT_ID} created successfully"
     
@@ -129,3 +155,10 @@ post_install() {
     # Can be overridden by specific installation scripts
     msg_info "Running post-installation tasks"
 }
+
+# Run the installation
+start
+build_container
+description
+post_install
+
