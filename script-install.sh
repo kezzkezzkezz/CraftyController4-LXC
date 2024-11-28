@@ -45,20 +45,29 @@ select_disk_setup() {
     fi
 }
 
-# Default container settings function
+# Get the next available container ID
+CT_ID=$(pct nextid)
+
+# Default container settings
 function default_settings() {
     CT_TYPE="1"               # Container type (1 = LXC)
     PASSWORD=""               # Optional password
-    CT_ID=$NEXTID             # Next available Container ID (Ensure NEXTID is valid or hardcode)
+    CT_ID="$CT_ID"            # Container ID
     HN="crafty-container"     # Use a valid DNS-compatible hostname
     DISK_SIZE="$var_disk"     # Disk size
     CORE_COUNT="$var_cpu"     # CPU cores
     RAM_SIZE="$var_ram"       # RAM size
     BRG="vmbr0"               # Bridge interface
     NET="dhcp"                # Network configuration
+    DISK_PATH="/dev/$selected_vg/lv_name"   # Modify for your LVM or standard path
     
     # Display default settings
-    echo_default
+    echo "Container will be created with the following settings:"
+    echo "Hostname: $HN"
+    echo "Disk Size: $DISK_SIZE"
+    echo "CPU Cores: $CORE_COUNT"
+    echo "RAM Size: $RAM_SIZE"
+    echo "Network: $NET"
 }
 
 # Crafty installation function
@@ -88,7 +97,7 @@ function install_crafty() {
     msg_ok "Crafty successfully installed"
 }
 
-# Build the container
+# Container creation command
 function build_container() {
     select_disk_setup
     pct create $CT_ID /var/lib/vz/template/cache/debian-12-standard_12.7-1_amd64.tar.zst \
@@ -96,9 +105,9 @@ function build_container() {
     --rootfs $DISK_PATH \
     --cores $CORE_COUNT \
     --memory $RAM_SIZE \
-    --net0 bridge=vmbr0,ip=dhcp
+    --net0 bridge=$BRG,ip=$NET
     pct start $CT_ID
-    msg_ok "Container built successfully."
+    echo "Container built successfully."
 }
 
 # Main installation process
