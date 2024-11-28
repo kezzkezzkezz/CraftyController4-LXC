@@ -1,147 +1,158 @@
-variables() {
-    # Set variables for container creation and configuration
-    NSAPP="Crafty"                  # Container hostname
-    NEXTID=$(pvesh get /cluster/nextid)   # Get next available container ID
-    CT_ID=$NEXTID                   # Assign the container ID
-    DISK_SIZE_DEFAULT="20"          # Default disk size in GB
-    CORE_COUNT_DEFAULT="2"          # Default number of CPU cores
-    RAM_SIZE_DEFAULT="2048"         # Default RAM size in MB
-    BRG_DEFAULT="vmbr0"             # Default network bridge (ensure it exists in your Proxmox config)
-    NET_DEFAULT="dhcp"              # Default network IP configuration (DHCP)
-}
+#!/bin/bash
 
-color() {
-    # Define color variables for output formatting
-    RED='\033[0;31m'
-    GREEN='\033[0;32m'
-    YELLOW='\033[1;33m'
-    NC='\033[0m' # No Color
-}
+# Ensure the script is run as root
+if [[ $EUID -ne 0 ]]; then
+   echo "This script must be run as root" 
+   exit 1
+fi
 
+# Variables
+NSAPP="Crafty"
+NEXTID=$(pvesh get /cluster/nextid)
+CT_ID=$NEXTID
+DISK_SIZE_DEFAULT="20"
+CORE_COUNT_DEFAULT="2"
+RAM_SIZE_DEFAULT="2048"
+BRG_DEFAULT="vmbr0"
+NET_DEFAULT="dhcp"
+
+# Color definitions
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
+# Messaging functions
 msg_info() {
-    # Function for info messages
     echo -e "${YELLOW}[INFO]${NC} $1"
 }
 
 msg_ok() {
-    # Function for success messages
     echo -e "${GREEN}[OK]${NC} $1"
 }
 
 msg_error() {
-    # Function for error messages
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
 msg_warn() {
-    # Function for warning messages
     echo -e "${YELLOW}[WARN]${NC} $1"
 }
 
+# Error handling
 catch_errors() {
-    # Catch errors and output message
-    trap 'msg_error "An error occurred. Exiting..."; exit 1' ERR
+    trap 'msg_error "An error occurred. Line $LINENO: $BASH_COMMAND"; exit 1' ERR
 }
 
-start() {
-    # Start the setup process
-    msg_info "Starting the setup process..."
-}
-
+# Select LVM volume
 select_lvm() {
-    # List available LVMs and allow user to select one
     msg_info "Fetching available LVMs..."
     LVM_LIST=$(lsblk -o NAME,MOUNTPOINT | grep "lvm" | awk '{print $1}')
-
     if [[ -z "$LVM_LIST" ]]; then
         msg_error "No LVM volumes found. Please ensure LVM is set up correctly."
         exit 1
     fi
-
-    # Prompt the user to select an LVM
-    msg_info "Please select an LVM to install the container on:"
-    select LVM_CHOICE in $LVM_LIST; do
+    
+    msg_info "Available LVM volumes:"
+    echo "$LVM_LIST" | nl
+    
+    while true; do
+        read -p "Enter the number of the LVM volume to use: " LVM_CHOICE_NUM
+        LVM_CHOICE=$(echo "$LVM_LIST" | sed -n "${LVM_CHOICE_NUM}p")
+        
         if [[ -n "$LVM_CHOICE" ]]; then
             msg_ok "You selected $LVM_CHOICE for the LXC container."
-            break
+            echo "$LVM_CHOICE"
+            return
         else
             msg_error "Invalid selection. Please choose a valid LVM."
         fi
     done
-
-    # Return the selected LVM volume
-    echo $LVM_CHOICE
 }
 
+# Build container
 build_container() {
-    # Create the container with selected settings
+    # Prompt for LVM selection
     SELECTED_LVM=$(select_lvm)
-
+    
     msg_info "Building LXC container..."
-    pct create $CT_ID local:vztmpl/debian-12-standard_12.7-1_amd64.tar.zst \
-        --hostname $NSAPP \
-        --rootfs $SELECTED_LVM:$DISK_SIZE_DEFAULT \
-        --cores $CORE_COUNT_DEFAULT \
-        --memory $RAM_SIZE_DEFAULT \
-        --net0 name=eth0,bridge=$BRG_DEFAULT,ip=$NET_DEFAULT
-    pct start $CT_ID
-    msg_ok "Container built successfully."
+    
+    # Corrected pct create command with proper quoting and escaping
+    pct create "$CT_ID" local:vztmpl/debian-12-standard_12.7-1_amd64.tar.zst \
+        -hostname "$NSAPP" \
+        -rootfs "$SELECTED_LVM:$DISK_SIZE_DEFAULT" \
+        -cores "$CORE_COUNT_DEFAULT" \
+        -memory "$RAM_SIZE_DEFAULT" \
+        -net0 name=eth0,bridge="$BRG_DEFAULT",ip="$NET_DEFAULT"
+    
+    msg_ok "Container created successfully."
+    
+    # Start the container
+    pct start "$CT_ID"
+    msg_ok "Container started successfully."
 }
 
+# Display default settings
 display_default_settings() {
-    # Display the default settings for verification
     msg_info "Default settings applied:"
     echo -e "  Hostname: $NSAPP"
+    echo -e "  Container ID: $CT_ID"
     echo -e "  Disk Size: ${DISK_SIZE_DEFAULT}GB"
     echo -e "  CPU Cores: $CORE_COUNT_DEFAULT"
     echo -e "  RAM: ${RAM_SIZE_DEFAULT}MB"
 }
 
-description() {
-    # Set the container description
+# Set container description
+set_description() {
     msg_info "Setting container description..."
-    pct set $CT_ID -description "LXC container for $NSAPP on Proxmox."
+    pct set "$CT_ID" -description "LXC container for $NSAPP on Proxmox."
     msg_ok "Description set."
 }
 
+# Finalize setup
 finish_setup() {
-    # Ensure the container is running before fetching the IP
-    msg_info "Starting the container if it's not already running..."
-    pct start $CT_ID || msg_error "Failed to start container."
-
+    # Ensure the container is running
+    msg_info "Ensuring container is running..."
+    pct start "$CT_ID" || msg_error "Failed to start container."
+    
+    # Enable auto-start
     msg_info "Enabling auto-start for LXC container..."
-    pct set $CT_ID --onboot 1
+    pct set "$CT_ID" --onboot 1
     msg_ok "Auto-start enabled."
-
-    # Fetch and display container's IP address with retry mechanism
+    
+    # Fetch IP address with retry
     msg_info "Fetching container IP address..."
+    IP=""
     for i in {1..5}; do
-        IP=$(pct exec $CT_ID -- ip -4 addr show eth0 | grep -oP '(?<=inet\s)\d+(\.\d+){3}')
+        IP=$(pct exec "$CT_ID" -- ip -4 addr show eth0 | grep -oP '(?<=inet\s)\d+(\.\d+){3}')
         if [[ -n "$IP" ]]; then
             break
         fi
         msg_warn "IP not available yet. Retrying... ($i/5)"
         sleep 5
     done
-
+    
     if [[ -z "$IP" ]]; then
-        IP="(Unable to fetch IP, check container networking)"
-        msg_warn "Could not retrieve IP address."
+        msg_warn "Could not retrieve IP address. Please check container networking."
+        IP="(Unable to fetch IP)"
     fi
+    
     msg_ok "Container IP address: $IP"
-
-    # Output access information for Crafty
+    
+    # Output access information
     msg_info "Crafty Installation Completed!"
     echo -e "Access Crafty Controller at: http://${IP}:8000"
     echo -e "Make sure to configure Crafty as needed."
 }
 
-# Call the functions to start the process
-catch_errors
-variables
-color
-start
-build_container
-display_default_settings
-description
-finish_setup
+# Main execution
+main() {
+    catch_errors
+    build_container
+    display_default_settings
+    set_description
+    finish_setup
+}
+
+# Run the main function
+main
