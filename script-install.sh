@@ -80,6 +80,26 @@ function install_crafty() {
     msg_ok "Crafty successfully installed"
 }
 
+# Build the container
+function build_container() {
+    msg_info "Building LXC container..."
+
+    # Select LVM storage or use default
+    SELECTED_LVM=$(select_lvm)
+
+    # Create the container
+    pct create $CT_ID $SELECTED_LVM:vztmpl/debian-12-standard_12.7-1_amd64.tar.zst \
+        --hostname $HN \
+        --rootfs $SELECTED_LVM:$DISK_SIZE \
+        --cores $CORE_COUNT \
+        --memory $RAM_SIZE \
+        --net0 name=eth0,bridge=$BRG,ip=$NET
+
+    # Start the container
+    pct start $CT_ID
+    msg_ok "Container built successfully."
+}
+
 # Main installation process
 start
 build_container
