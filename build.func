@@ -35,7 +35,7 @@ start() {
 build_container() {
     msg_info "Building LXC container..."
     # Example of container creation (Proxmox `pct` commands)
-    pct create $NEXTID local:vztmpl/debian-12-standard_12.0-1_amd64.tar.zst \
+    pct create $NEXTID local:vztmpl/debian-12-standard_12.7-1_amd64.tar.zst \
         -storage local-lvm \
         -hostname $NSAPP \
         -cores $CORE_COUNT_DEFAULT \
