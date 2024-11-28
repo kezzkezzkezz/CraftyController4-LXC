@@ -1,6 +1,7 @@
 variables() {
     NSAPP="Crafty"
     NEXTID=$(pvesh get /cluster/nextid)
+    CT_ID=$NEXTID
     DISK_SIZE_DEFAULT="20"
     CORE_COUNT_DEFAULT="2"
     RAM_SIZE_DEFAULT="2048"
@@ -14,14 +15,21 @@ color() {
     YELLOW='\033[1;33m'
     NC='\033[0m' # No Color
 }
+
 msg_info() {
     echo -e "${YELLOW}[INFO]${NC} $1"
 }
+
 msg_ok() {
     echo -e "${GREEN}[OK]${NC} $1"
 }
+
 msg_error() {
     echo -e "${RED}[ERROR]${NC} $1"
+}
+
+msg_warn() {
+    echo -e "${YELLOW}[WARN]${NC} $1"
 }
 
 catch_errors() {
@@ -32,16 +40,16 @@ start() {
     msg_info "Starting the setup process..."
 }
 
-function build_container() {
+build_container() {
     msg_info "Building LXC container..."
     pct create $CT_ID local:vztmpl/debian-12-standard_12.7-1_amd64.tar.zst \
-        --hostname $HN --rootfs local-lvm:$DISK_SIZE \
+        --hostname $NSAPP --rootfs local-lvm:$DISK_SIZE \
         --cores $CORE_COUNT --memory $RAM_SIZE --net0 name=eth0,bridge=$BRG,ip=$NET
     pct start $CT_ID
     msg_ok "Container built successfully."
 }
 
-echo_default() {
+display_default_settings() {
     msg_info "Default settings applied:"
     echo -e "  Hostname: $NSAPP"
     echo -e "  Disk Size: ${DISK_SIZE_DEFAULT}GB"
@@ -51,19 +59,27 @@ echo_default() {
 
 description() {
     msg_info "Setting container description..."
-    pct set $NEXTID -description "LXC container for $NSAPP on Proxmox."
+    pct set $CT_ID -description "LXC container for $NSAPP on Proxmox."
     msg_ok "Description set."
 }
 
-function finish_setup() {
+finish_setup() {
     # Enable auto-start for the container
     msg_info "Enabling auto-start for LXC container..."
     pct set $CT_ID --onboot 1
     msg_ok "Auto-start enabled."
 
-    # Fetch and display container's IP address
+    # Fetch and display container's IP address with retry mechanism
     msg_info "Fetching container IP address..."
-    IP=$(pct exec $CT_ID -- ip -4 addr show eth0 | grep -oP '(?<=inet\s)\d+(\.\d+){3}')
+    for i in {1..5}; do
+        IP=$(pct exec $CT_ID -- ip -4 addr show eth0 | grep -oP '(?<=inet\s)\d+(\.\d+){3}')
+        if [[ -n "$IP" ]]; then
+            break
+        fi
+        msg_warn "IP not available yet. Retrying... ($i/5)"
+        sleep 5
+    done
+
     if [[ -z "$IP" ]]; then
         IP="(Unable to fetch IP, check container networking)"
         msg_warn "Could not retrieve IP address."
@@ -75,3 +91,13 @@ function finish_setup() {
     echo -e "Access Crafty Controller at: http://${IP}:8000"
     echo -e "Make sure to configure Crafty as needed."
 }
+
+# Call the functions to start the process
+catch_errors
+variables
+color
+start
+build_container
+display_default_settings
+description
+finish_setup
