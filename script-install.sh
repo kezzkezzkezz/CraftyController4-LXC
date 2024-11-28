@@ -16,46 +16,33 @@ var_ram="2048"    # RAM in MB
 var_os="debian"   # Operating system
 var_version="12"  # OS version
 
-# Core functions
+# Call core functions
+variables
+color
+catch_errors
 
-variables() {
-    NSAPP="${APP:-UnknownApp}"
-    NEXTID=$(pvesh get /cluster/nextid)
+# Function to list available LVM volume groups
+list_available_vgs() {
+    echo "Available LVM Volume Groups:"
+    vgs --noheadings -o vg_name
 }
 
-color() {
-    RED='\033[0;31m'
-    GREEN='\033[0;32m'
-    YELLOW='\033[1;33m'
-    BLUE='\033[0;34m'
-    NC='\033[0m' # No Color
-}
-
-catch_errors() {
-    trap 'error_handler $LINENO' ERR
-}
-
-error_handler() {
-    local line_number=$1
-    echo -e "${RED}[ERROR]${NC} An error occurred on line $line_number"
-    echo -e "${YELLOW}[WARN]${NC} Command that failed: $BASH_COMMAND"
-    exit 1
-}
-
-msg_info() {
-    echo -e "${YELLOW}[INFO]${NC} $1"
-}
-
-msg_ok() {
-    echo -e "${GREEN}[OK]${NC} $1"
-}
-
-msg_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
-}
-
-msg_warn() {
-    echo -e "${YELLOW}[WARN]${NC} $1"
+# Function to select LVM or standard disk setup
+select_disk_setup() {
+    read -p "Do you want to use LVM for the disk setup? (y/n): " use_lvm
+    if [[ "$use_lvm" =~ ^[Yy]$ ]]; then
+        list_available_vgs
+        read -p "Enter the volume group name to use for LVM: " selected_vg
+        if ! vgs "$selected_vg" > /dev/null 2>&1; then
+            echo "Invalid volume group selected."
+            exit 1
+        fi
+        DISK_TYPE="lvm"
+        DISK_PATH="${selected_vg}:${DISK_SIZE}"
+    else
+        DISK_TYPE="standard"
+        DISK_PATH="local:${DISK_SIZE}"
+    fi
 }
 
 # Default container settings function
@@ -103,39 +90,22 @@ function install_crafty() {
 
 # Build the container
 function build_container() {
-    msg_info "Building LXC container..."
-
-    # Create the container without using select_lvm
+    select_disk_setup
     pct create $CT_ID /var/lib/vz/template/cache/debian-12-standard_12.7-1_amd64.tar.zst \
         --hostname $HN \
-        --rootfs /var/lib/vz/$DISK_SIZE \
+        --rootfs $DISK_PATH \
         --cores $CORE_COUNT \
         --memory $RAM_SIZE \
         --net0 name=eth0,bridge=$BRG,ip=$NET
-
-    # Start the container
     pct start $CT_ID
     msg_ok "Container built successfully."
 }
 
 # Main installation process
-start() {
-    # Ensure script is run as root
-    if [[ $EUID -ne 0 ]]; then
-        msg_error "This script must be run as root"
-        exit 1
-    fi
-    
-    msg_info "Initializing ${APP:-Application} LXC Container Installation"
-}
-
-# Run the installation steps
 start
-variables
-color
-catch_errors
 build_container
 default_settings
+description
 install_crafty
 
 # Final messages
