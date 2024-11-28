@@ -10,11 +10,6 @@ fi
 NSAPP="Crafty"
 NEXTID=$(pvesh get /cluster/nextid)
 CT_ID=$NEXTID
-DISK_SIZE_DEFAULT="20"
-CORE_COUNT_DEFAULT="2"
-RAM_SIZE_DEFAULT="2048"
-BRG_DEFAULT="vmbr0"
-NET_DEFAULT="dhcp"
 
 # Color definitions
 RED='\033[0;31m'
@@ -44,10 +39,13 @@ catch_errors() {
     trap 'msg_error "An error occurred. Line $LINENO: $BASH_COMMAND"; exit 1' ERR
 }
 
-# Select LVM volume
+# Prompt for LVM selection
 select_lvm() {
-    msg_info "Fetching available LVMs..."
-    LVM_LIST=$(lsblk -o NAME,MOUNTPOINT | grep "lvm" | awk '{print $1}')
+    msg_info "Fetching available LVM volumes..."
+    
+    # Get LVM volumes with their volume group
+    LVM_LIST=$(lvs -o vg_name,lv_name --noheadings | tr -s ' ')
+    
     if [[ -z "$LVM_LIST" ]]; then
         msg_error "No LVM volumes found. Please ensure LVM is set up correctly."
         exit 1
@@ -58,26 +56,58 @@ select_lvm() {
     
     while true; do
         read -p "Enter the number of the LVM volume to use: " LVM_CHOICE_NUM
-        LVM_CHOICE=$(echo "$LVM_LIST" | sed -n "${LVM_CHOICE_NUM}p")
         
-        if [[ -n "$LVM_CHOICE" ]]; then
-            msg_ok "You selected $LVM_CHOICE for the LXC container."
-            echo "$LVM_CHOICE"
+        # Validate and extract the selected LVM volume
+        SELECTED_LVM=$(echo "$LVM_LIST" | sed -n "${LVM_CHOICE_NUM}p" | awk '{print $1 "/" $2}')
+        
+        if [[ -n "$SELECTED_LVM" ]]; then
+            msg_ok "You selected $SELECTED_LVM for the LXC container."
+            echo "$SELECTED_LVM"
             return
         else
-            msg_error "Invalid selection. Please choose a valid LVM."
+            msg_error "Invalid selection. Please choose a valid LVM volume."
         fi
     done
 }
 
+# Prompt for container configuration
+get_container_config() {
+    # Disk Size
+    read -p "Enter disk size (GB) [default: 20]: " DISK_SIZE_DEFAULT
+    DISK_SIZE_DEFAULT=${DISK_SIZE_DEFAULT:-20}
+    
+    # CPU Cores
+    read -p "Enter number of CPU cores [default: 2]: " CORE_COUNT_DEFAULT
+    CORE_COUNT_DEFAULT=${CORE_COUNT_DEFAULT:-2}
+    
+    # RAM Size
+    read -p "Enter RAM size (MB) [default: 2048]: " RAM_SIZE_DEFAULT
+    RAM_SIZE_DEFAULT=${RAM_SIZE_DEFAULT:-2048}
+    
+    # Network Bridge
+    read -p "Enter network bridge [default: vmbr0]: " BRG_DEFAULT
+    BRG_DEFAULT=${BRG_DEFAULT:-vmbr0}
+    
+    # Network Configuration
+    read -p "Enter network configuration (dhcp/static) [default: dhcp]: " NET_TYPE
+    NET_TYPE=${NET_TYPE:-dhcp}
+    
+    if [[ "$NET_TYPE" == "static" ]]; then
+        read -p "Enter static IP address: " NET_DEFAULT
+    else
+        NET_DEFAULT="dhcp"
+    fi
+}
+
 # Build container
 build_container() {
-    # Prompt for LVM selection
+    # Prompt for LVM and container configuration
     SELECTED_LVM=$(select_lvm)
+    get_container_config
     
     msg_info "Building LXC container..."
     
-    # Corrected pct create command with proper quoting and escaping
+    # Construct pct create command with selected options
     pct create "$CT_ID" local:vztmpl/debian-12-standard_12.7-1_amd64.tar.zst \
         -hostname "$NSAPP" \
         -rootfs "$SELECTED_LVM:$DISK_SIZE_DEFAULT" \
@@ -92,20 +122,23 @@ build_container() {
     msg_ok "Container started successfully."
 }
 
-# Display default settings
-display_default_settings() {
-    msg_info "Default settings applied:"
+# Display container settings
+display_container_settings() {
+    msg_info "Container settings:"
     echo -e "  Hostname: $NSAPP"
     echo -e "  Container ID: $CT_ID"
+    echo -e "  LVM Volume: $SELECTED_LVM"
     echo -e "  Disk Size: ${DISK_SIZE_DEFAULT}GB"
     echo -e "  CPU Cores: $CORE_COUNT_DEFAULT"
     echo -e "  RAM: ${RAM_SIZE_DEFAULT}MB"
+    echo -e "  Network Bridge: $BRG_DEFAULT"
+    echo -e "  Network Configuration: $NET_DEFAULT"
 }
 
 # Set container description
 set_description() {
     msg_info "Setting container description..."
-    pct set "$CT_ID" -description "LXC container for $NSAPP on Proxmox."
+    pct set "$CT_ID" -description "LXC container for $NSAPP on Proxmox (${NET_DEFAULT})"
     msg_ok "Description set."
 }
 
@@ -149,7 +182,7 @@ finish_setup() {
 main() {
     catch_errors
     build_container
-    display_default_settings
+    display_container_settings
     set_description
     finish_setup
 }
