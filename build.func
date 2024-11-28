@@ -65,7 +65,10 @@ description() {
 }
 
 finish_setup() {
-    # Enable auto-start for the container
+    # Ensure the container is running before fetching the IP
+    msg_info "Starting the container if it's not already running..."
+    pct start $CT_ID || msg_error "Failed to start container."
+
     msg_info "Enabling auto-start for LXC container..."
     pct set $CT_ID --onboot 1
     msg_ok "Auto-start enabled."
