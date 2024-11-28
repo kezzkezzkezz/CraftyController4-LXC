@@ -1,21 +1,38 @@
 #!/bin/bash
 
-# Ensure the script is run as root
-if [[ $EUID -ne 0 ]]; then
-   echo "This script must be run as root" 
-   exit 1
-fi
+# Utility functions and core functionality for LXC container installation
 
-# Variables
-NSAPP="Crafty"
-NEXTID=$(pvesh get /cluster/nextid)
-CT_ID=$NEXTID
+# Variables function to set global configuration
+variables() {
+    # Application name (set by calling script)
+    NSAPP="${APP:-UnknownApp}"
+    
+    # Get the next available container ID
+    NEXTID=$(pvesh get /cluster/nextid)
+}
 
-# Color definitions
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
+# Color definitions for consistent output
+color() {
+    RED='\033[0;31m'
+    GREEN='\033[0;32m'
+    YELLOW='\033[1;33m'
+    BLUE='\033[0;34m'
+    NC='\033[0m' # No Color
+}
+
+# Error handling and trap
+catch_errors() {
+    trap 'error_handler $LINENO' ERR
+}
+
+# Centralized error handler
+error_handler() {
+    local line_number=$1
+    
+    echo -e "${RED}[ERROR]${NC} An error occurred on line $line_number"
+    echo -e "${YELLOW}[WARN]${NC} Command that failed: $BASH_COMMAND"
+    exit 1
+}
 
 # Messaging functions
 msg_info() {
@@ -34,158 +51,81 @@ msg_warn() {
     echo -e "${YELLOW}[WARN]${NC} $1"
 }
 
-# Error handling
-catch_errors() {
-    trap 'msg_error "An error occurred. Line $LINENO: $BASH_COMMAND"; exit 1' ERR
+# Echo default settings (can be overridden by specific scripts)
+echo_default() {
+    msg_info "Container Configuration:"
+    echo -e "  Container Type: ${CT_TYPE:-Not Set}"
+    echo -e "  Container ID: ${CT_ID:-Not Set}"
+    echo -e "  Hostname: ${HN:-Not Set}"
+    echo -e "  Disk Size: ${DISK_SIZE:-Not Set} GB"
+    echo -e "  CPU Cores: ${CORE_COUNT:-Not Set}"
+    echo -e "  RAM Size: ${RAM_SIZE:-Not Set} MB"
+    echo -e "  Network Bridge: ${BRG:-vmbr0}"
+    echo -e "  Network Config: ${NET:-dhcp}"
 }
 
-# Prompt for LVM selection
-select_lvm() {
-    msg_info "Fetching available LVM volumes..."
+# Description setter for the container
+description() {
+    if [[ -z "$CT_ID" ]]; then
+        msg_error "Container ID not set. Cannot set description."
+        return 1
+    fi
     
-    # Get LVM volumes with their volume group
-    LVM_LIST=$(lvs -o vg_name,lv_name --noheadings | tr -s ' ')
+    local desc="LXC Container for ${APP:-Unknown Application}"
     
-    if [[ -z "$LVM_LIST" ]]; then
-        msg_error "No LVM volumes found. Please ensure LVM is set up correctly."
+    if [[ -n "$PASSWORD" ]]; then
+        desc+=" | Initial Password Set"
+    fi
+    
+    msg_info "Setting container description"
+    pct set "$CT_ID" -description "$desc"
+    msg_ok "Description set successfully"
+}
+
+# Core container build function
+build_container() {
+    # Validate required variables
+    if [[ -z "$CT_ID" || -z "$HN" || -z "$DISK_SIZE" ]]; then
+        msg_error "Missing required container configuration variables"
         exit 1
     fi
     
-    msg_info "Available LVM volumes:"
-    echo "$LVM_LIST" | nl
+    # Default template if not specified
+    local TEMPLATE="${var_os:-debian}-${var_version:-12}-standard_12.7-1_amd64.tar.zst"
     
-    while true; do
-        read -p "Enter the number of the LVM volume to use: " LVM_CHOICE_NUM
-        
-        # Validate and extract the selected LVM volume
-        SELECTED_LVM=$(echo "$LVM_LIST" | sed -n "${LVM_CHOICE_NUM}p" | awk '{print $1 "/" $2}')
-        
-        if [[ -n "$SELECTED_LVM" ]]; then
-            msg_ok "You selected $SELECTED_LVM for the LXC container."
-            echo "$SELECTED_LVM"
-            return
-        else
-            msg_error "Invalid selection. Please choose a valid LVM volume."
-        fi
-    done
-}
-
-# Prompt for container configuration
-get_container_config() {
-    # Disk Size
-    read -p "Enter disk size (GB) [default: 20]: " DISK_SIZE_DEFAULT
-    DISK_SIZE_DEFAULT=${DISK_SIZE_DEFAULT:-20}
+    msg_info "Creating LXC container ${CT_ID}"
     
-    # CPU Cores
-    read -p "Enter number of CPU cores [default: 2]: " CORE_COUNT_DEFAULT
-    CORE_COUNT_DEFAULT=${CORE_COUNT_DEFAULT:-2}
+    # Create container with specified parameters
+    pct create "$CT_ID" "local:vztmpl/$TEMPLATE" \
+        -hostname "$HN" \
+        -rootfs "local:$DISK_SIZE" \
+        -cores "${CORE_COUNT:-2}" \
+        -memory "${RAM_SIZE:-2048}" \
+        -net0 "name=eth0,bridge=${BRG:-vmbr0},ip=${NET:-dhcp}"
     
-    # RAM Size
-    read -p "Enter RAM size (MB) [default: 2048]: " RAM_SIZE_DEFAULT
-    RAM_SIZE_DEFAULT=${RAM_SIZE_DEFAULT:-2048}
-    
-    # Network Bridge
-    read -p "Enter network bridge [default: vmbr0]: " BRG_DEFAULT
-    BRG_DEFAULT=${BRG_DEFAULT:-vmbr0}
-    
-    # Network Configuration
-    read -p "Enter network configuration (dhcp/static) [default: dhcp]: " NET_TYPE
-    NET_TYPE=${NET_TYPE:-dhcp}
-    
-    if [[ "$NET_TYPE" == "static" ]]; then
-        read -p "Enter static IP address: " NET_DEFAULT
-    else
-        NET_DEFAULT="dhcp"
-    fi
-}
-
-# Build container
-build_container() {
-    # Prompt for LVM and container configuration
-    SELECTED_LVM=$(select_lvm)
-    get_container_config
-    
-    msg_info "Building LXC container..."
-    
-    # Construct pct create command with selected options
-    pct create "$CT_ID" local:vztmpl/debian-12-standard_12.7-1_amd64.tar.zst \
-        -hostname "$NSAPP" \
-        -rootfs "$SELECTED_LVM:$DISK_SIZE_DEFAULT" \
-        -cores "$CORE_COUNT_DEFAULT" \
-        -memory "$RAM_SIZE_DEFAULT" \
-        -net0 name=eth0,bridge="$BRG_DEFAULT",ip="$NET_DEFAULT"
-    
-    msg_ok "Container created successfully."
+    msg_ok "Container ${CT_ID} created successfully"
     
     # Start the container
     pct start "$CT_ID"
-    msg_ok "Container started successfully."
+    msg_ok "Container ${CT_ID} started"
 }
 
-# Display container settings
-display_container_settings() {
-    msg_info "Container settings:"
-    echo -e "  Hostname: $NSAPP"
-    echo -e "  Container ID: $CT_ID"
-    echo -e "  LVM Volume: $SELECTED_LVM"
-    echo -e "  Disk Size: ${DISK_SIZE_DEFAULT}GB"
-    echo -e "  CPU Cores: $CORE_COUNT_DEFAULT"
-    echo -e "  RAM: ${RAM_SIZE_DEFAULT}MB"
-    echo -e "  Network Bridge: $BRG_DEFAULT"
-    echo -e "  Network Configuration: $NET_DEFAULT"
-}
-
-# Set container description
-set_description() {
-    msg_info "Setting container description..."
-    pct set "$CT_ID" -description "LXC container for $NSAPP on Proxmox (${NET_DEFAULT})"
-    msg_ok "Description set."
-}
-
-# Finalize setup
-finish_setup() {
-    # Ensure the container is running
-    msg_info "Ensuring container is running..."
-    pct start "$CT_ID" || msg_error "Failed to start container."
+# Main start function to initialize the process
+start() {
+    # Clear the screen for clean output
+    clear
     
-    # Enable auto-start
-    msg_info "Enabling auto-start for LXC container..."
-    pct set "$CT_ID" --onboot 1
-    msg_ok "Auto-start enabled."
-    
-    # Fetch IP address with retry
-    msg_info "Fetching container IP address..."
-    IP=""
-    for i in {1..5}; do
-        IP=$(pct exec "$CT_ID" -- ip -4 addr show eth0 | grep -oP '(?<=inet\s)\d+(\.\d+){3}')
-        if [[ -n "$IP" ]]; then
-            break
-        fi
-        msg_warn "IP not available yet. Retrying... ($i/5)"
-        sleep 5
-    done
-    
-    if [[ -z "$IP" ]]; then
-        msg_warn "Could not retrieve IP address. Please check container networking."
-        IP="(Unable to fetch IP)"
+    # Ensure script is run as root
+    if [[ $EUID -ne 0 ]]; then
+        msg_error "This script must be run as root"
+        exit 1
     fi
     
-    msg_ok "Container IP address: $IP"
-    
-    # Output access information
-    msg_info "Crafty Installation Completed!"
-    echo -e "Access Crafty Controller at: http://${IP}:8000"
-    echo -e "Make sure to configure Crafty as needed."
+    msg_info "Initializing ${APP:-Application} LXC Container Installation"
 }
 
-# Main execution
-main() {
-    catch_errors
-    build_container
-    display_container_settings
-    set_description
-    finish_setup
+# Placeholder for any post-installation tasks
+post_install() {
+    # Can be overridden by specific installation scripts
+    msg_info "Running post-installation tasks"
 }
-
-# Run the main function
-main
