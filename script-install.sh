@@ -92,11 +92,11 @@ function install_crafty() {
 function build_container() {
     select_disk_setup
     pct create $CT_ID /var/lib/vz/template/cache/debian-12-standard_12.7-1_amd64.tar.zst \
-        --hostname $HN \
-        --rootfs $DISK_PATH \
-        --cores $CORE_COUNT \
-        --memory $RAM_SIZE \
-        --net0 name=eth0,bridge=$BRG,ip=$NET
+    --hostname $HN \
+    --rootfs $DISK_PATH \
+    --cores $CORE_COUNT \
+    --memory $RAM_SIZE \
+    --net0 bridge=vmbr0,ip=dhcp
     pct start $CT_ID
     msg_ok "Container built successfully."
 }
