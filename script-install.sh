@@ -85,7 +85,7 @@ CTID=$(pvesh get /cluster/nextid)
 msg_ok "Using CTID: ${BL}$CTID${CL}"
 
 # Set the PCT_OSTYPE directly
-PCT_OSTYPE="debian-12.7-1"
+PCT_OSTYPE="debian-12-standard_12.7-1"
 msg_ok "Using PCT_OSTYPE: ${BL}$PCT_OSTYPE${CL}"
 
 
