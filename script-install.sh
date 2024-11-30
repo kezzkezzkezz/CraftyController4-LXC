@@ -65,6 +65,7 @@ msg_ok "Using CTID: ${BL}$CTID${CL}"
 PCT_OSTYPE="debian-12.7-1"
 msg_ok "Using PCT_OSTYPE: ${BL}$PCT_OSTYPE${CL}"
 
+SPINNER_PID="${SPINNER_PID:-}"
 
 # Validate required variables
 [[ "${CTID:-}" ]] || exit "You need to set 'CTID' variable."
