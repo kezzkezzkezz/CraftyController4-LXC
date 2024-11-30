@@ -14,6 +14,9 @@ HOLD=" "
 set -Eeuo pipefail
 trap 'error_handler $LINENO "$BASH_COMMAND"' ERR
 
+# Initialize SPINNER_PID
+SPINNER_PID="${SPINNER_PID:-}"
+
 function error_handler() {
     if [ -n "$SPINNER_PID" ] && ps -p $SPINNER_PID > /dev/null; then kill $SPINNER_PID > /dev/null; fi
     printf "\e[?25h"
@@ -65,7 +68,6 @@ msg_ok "Using CTID: ${BL}$CTID${CL}"
 PCT_OSTYPE="debian-12.7-1"
 msg_ok "Using PCT_OSTYPE: ${BL}$PCT_OSTYPE${CL}"
 
-SPINNER_PID="${SPINNER_PID:-}"
 
 # Validate required variables
 [[ "${CTID:-}" ]] || exit "You need to set 'CTID' variable."
