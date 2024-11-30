@@ -51,7 +51,7 @@ build_container() {
         --rootfs "$STORAGE_POOL:${var_disk}G" \
         --cores "$var_cpu" \
         --memory "$var_ram" \
-        --net0 "bridge=vmbr0,ip=dhcp"
+        --net0 "bridge=vmbr0,name=eth0,ip=dhcp"
     pct start "$CT_ID"
     echo "Container built successfully."
 }
