@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Crafty LXC Container Installation Script
 
-echo -e "Loading Crafty LXC Container Installation..."
+echo -e "Loading Crafty LXC Container Installation...\n"
 
 # Configuration variables
 APP="Crafty"
@@ -38,13 +38,34 @@ select_storage_pool() {
     echo "$POOLS" | awk "NR==$SELECTED_POOL {print \$1}"
 }
 
+# Function to find a unique container ID
+find_next_ct_id() {
+    for id in {100..999}; do
+        if ! pct status "$id" &>/dev/null; then
+            echo "$id"
+            return
+        fi
+    done
+    echo "No available container IDs found!" >&2
+    exit 1
+}
+
 # Get the selected storage pool
 STORAGE_POOL=$(select_storage_pool)
 echo "Selected storage pool: $STORAGE_POOL"
 
+# Find an available container ID
+CT_ID=$(find_next_ct_id)
+echo "Using container ID: $CT_ID"
+
+# Ensure storage pool is valid and exists
+if ! pvesm status | grep -q "^$STORAGE_POOL"; then
+    echo "Selected storage pool does not exist or is invalid!"
+    exit 1
+fi
+
 # Function to build the container
 build_container() {
-    CT_ID="100"  # Example container ID
     HN="crafty-container"
     pct create "$CT_ID" "$STORAGE_POOL:debian-12-standard_12.7-1_amd64.tar.zst" \
         --hostname "$HN" \
@@ -52,7 +73,8 @@ build_container() {
         --cores "$var_cpu" \
         --memory "$var_ram" \
         --net0 "bridge=vmbr0,name=eth0,ip=dhcp" \
-        --features nesting=1
+        --password "" \
+        --unprivileged 1
     pct start "$CT_ID"
     echo "Container built successfully."
 }
