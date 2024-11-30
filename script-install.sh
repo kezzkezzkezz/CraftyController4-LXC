@@ -63,8 +63,10 @@ msg_ok "Using CTID: ${BL}$CTID${CL}"
 
 # Auto-detect available PCT_OSTYPE
 PCT_OSTYPE=$(pveam available | awk '{print $1}' | head -n 1)
-[[ -z "$PCT_OSTYPE" ]] && exit "No valid PCT_OSTYPE found."
-
+if [[ -z "$PCT_OSTYPE" ]]; then
+  msg_error "No valid PCT_OSTYPE found. Please ensure LXC templates are available."
+  exit 1
+fi
 msg_ok "Using PCT_OSTYPE: ${BL}$PCT_OSTYPE${CL}"
 
 # Validate required variables
