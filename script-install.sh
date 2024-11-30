@@ -30,6 +30,21 @@ VAR_DISK="20"  # Disk size in GB
 VAR_CPU="2"    # CPU cores
 VAR_RAM="2048" # RAM size in MB
 
+# Function to find the next available container ID
+find_next_available_ctid() {
+    local start_id=100
+    local max_id=999
+    
+    for ((id=start_id; id<=max_id; id++)); do
+        if ! pct status $id &>/dev/null; then
+            echo "$id"
+            return 0
+        fi
+    done
+    echo "No available container IDs found!"
+    exit 1
+}
+
 # Function to list storage pools and select one
 select_storage_pool() {
     local POOLS
