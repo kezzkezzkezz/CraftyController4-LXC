@@ -10,38 +10,19 @@ log_info() {
     echo "[INFO] $1"
 }
 
-# Function to check if a container ID is in use across all Proxmox nodes
-is_ctid_in_use() {
-    local CTID="$1"
-    
-    # Check across all nodes using pct list
-    for NODE in $(pvecm nodes | awk 'NR>1 {print $1}'); do
-        if pct list "$NODE" | awk '{print $1}' | grep -q "^$CTID$"; then
-            return 0  # Container with this ID exists on the node
-        fi
-    done
-    
-    return 1  # ID is available
-}
+# Test if required variables are set
+[[ "${CTID:-}" ]] || exit "You need to set 'CTID' variable."
+[[ "${PCT_OSTYPE:-}" ]] || exit "You need to set 'PCT_OSTYPE' variable."
 
-# Function to find a unique container ID across all nodes
-find_next_available_ctid() {
-    local start_id=100
-    local max_id=999
-    
-    for ((id=start_id; id<=max_id; id++)); do
-        # Check if the ID is not in use
-        if ! is_ctid_in_use "$id"; then
-            echo "$id"
-            return 0
-        fi
-    done
-    
-    log_error "No available container IDs found between $start_id and $max_id!"
-    exit 1
-}
+# Test if ID is valid
+[ "$CTID" -ge "100" ] || exit "ID cannot be less than 100."
 
-
+# Test if ID is in use
+if pct status $CTID &>/dev/null; then
+  echo -e "ID '$CTID' is already in use."
+  unset CTID
+  exit "Cannot use ID that is already in use."
+fi
 
 # Configuration variables
 APP="Crafty"
