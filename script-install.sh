@@ -1,149 +1,162 @@
 #!/usr/bin/env bash
-# Crafty LXC Container Installation Script
 
-# Logging function
-log_error() {
-    echo "[ERROR] $1" >&2
+# Logging and spinner setup
+YW=$(echo "\033[33m")
+BL=$(echo "\033[36m")
+RD=$(echo "\033[01;31m")
+GN=$(echo "\033[1;92m")
+CL=$(echo "\033[m")
+CM="${GN}✓${CL}"
+CROSS="${RD}✗${CL}"
+BFR="\\r\\033[K"
+HOLD=" "
+
+set -Eeuo pipefail
+trap 'error_handler $LINENO "$BASH_COMMAND"' ERR
+
+function error_handler() {
+    if [ -n "$SPINNER_PID" ] && ps -p $SPINNER_PID > /dev/null; then kill $SPINNER_PID > /dev/null; fi
+    printf "\e[?25h"
+    local exit_code="$?"
+    local line_number="$1"
+    local command="$2"
+    local error_message="${RD}[ERROR]${CL} in line ${RD}$line_number${CL}: exit code ${RD}$exit_code${CL}: while executing command ${YW}$command${CL}"
+    echo -e "\n$error_message\n"
 }
 
-log_info() {
-    echo "[INFO] $1"
+function spinner() {
+    local chars="/-\|"
+    local spin_i=0
+    printf "\e[?25l"
+    while true; do
+        printf "\r \e[36m%s\e[0m" "${chars:spin_i++%${#chars}:1}"
+        sleep 0.1
+    done
 }
 
-# Test if required variables are set
+function msg_info() {
+  local msg="$1"
+  echo -ne " ${HOLD} ${YW}${msg}   "
+  spinner &
+  SPINNER_PID=$!
+}
+
+function msg_ok() {
+  if [ -n "$SPINNER_PID" ] && ps -p $SPINNER_PID > /dev/null; then kill $SPINNER_PID > /dev/null; fi
+  printf "\e[?25h"
+  local msg="$1"
+  echo -e "${BFR} ${CM} ${GN}${msg}${CL}"
+}
+
+function msg_error() {
+  if [ -n "$SPINNER_PID" ] && ps -p $SPINNER_PID > /dev/null; then kill $SPINNER_PID > /dev/null; fi
+  printf "\e[?25h"
+  local msg="$1"
+  echo -e "${BFR} ${CROSS} ${RD}${msg}${CL}"
+}
+
+# Validate required variables
 [[ "${CTID:-}" ]] || exit "You need to set 'CTID' variable."
 [[ "${PCT_OSTYPE:-}" ]] || exit "You need to set 'PCT_OSTYPE' variable."
 
-# Test if ID is valid
+# Validate ID
 [ "$CTID" -ge "100" ] || exit "ID cannot be less than 100."
 
-# Test if ID is in use
+# Check if ID is already in use
 if pct status $CTID &>/dev/null; then
-  echo -e "ID '$CTID' is already in use."
+  msg_error "ID '$CTID' is already in use."
   unset CTID
   exit "Cannot use ID that is already in use."
 fi
 
-# Configuration variables
-APP="Crafty"
-VAR_DISK="20"  # Disk size in GB
-VAR_CPU="2"    # CPU cores
-VAR_RAM="2048" # RAM size in MB
+# Storage validation
+msg_info "Validating Storage"
+VALIDCT=$(pvesm status -content rootdir | awk 'NR>1')
+if [ -z "$VALIDCT" ]; then
+  msg_error "Unable to detect a valid Container Storage location."
+  exit 1
+fi
 
-# Function to find the next available container ID
-find_next_available_ctid() {
-    local start_id=100
-    local max_id=999
-    
-    for ((id=start_id; id<=max_id; id++)); do
-        if ! pct status $id &>/dev/null; then
-            echo "$id"
-            return 0
-        fi
+VALIDTMP=$(pvesm status -content vztmpl | awk 'NR>1')
+if [ -z "$VALIDTMP" ]; then
+  msg_error "Unable to detect a valid Template Storage location."
+  exit 1
+fi
+
+# Select storage function
+function select_storage() {
+  local CLASS=$1
+  local CONTENT
+  local CONTENT_LABEL
+  case $CLASS in
+  container)
+    CONTENT='rootdir'
+    CONTENT_LABEL='Container'
+    ;;
+  template)
+    CONTENT='vztmpl'
+    CONTENT_LABEL='Container template'
+    ;;
+  *) false || exit "Invalid storage class." ;;
+  esac
+  
+  # Query all storage locations
+  local -a MENU
+  while read -r line; do
+    local TAG=$(echo $line | awk '{print $1}')
+    local TYPE=$(echo $line | awk '{printf "%-10s", $2}')
+    local FREE=$(echo $line | numfmt --field 4-6 --from-unit=K --to=iec --format %.2f | awk '{printf( "%9sB", $6)}')
+    local ITEM="  Type: $TYPE Free: $FREE "
+    local OFFSET=2
+    if [[ $((${#ITEM} + $OFFSET)) -gt ${MSG_MAX_LENGTH:-} ]]; then
+      local MSG_MAX_LENGTH=$((${#ITEM} + $OFFSET))
+    fi
+    MENU+=("$TAG" "$ITEM" "OFF")
+  done < <(pvesm status -content $CONTENT | awk 'NR>1')
+  
+  # Select storage location
+  if [ $((${#MENU[@]}/3)) -eq 1 ]; then
+    printf ${MENU[0]}
+  else
+    local STORAGE
+    while [ -z "${STORAGE:+x}" ]; do
+      STORAGE=$(whiptail --backtitle "Proxmox VE Helper Scripts" --title "Storage Pools" --radiolist \
+      "Which storage pool would you like to use for the ${CONTENT_LABEL,,}?\n" \
+      16 $(($MSG_MAX_LENGTH + 23)) 6 \
+      "${MENU[@]}" 3>&1 1>&2 2>&3) || exit "Menu aborted."
     done
-    echo "No available container IDs found!"
-    exit 1
+    printf $STORAGE
+  fi
 }
 
-# Function to list storage pools and select one
-select_storage_pool() {
-    local POOLS
-    # Gather available storage pools
-    POOLS=$(pvesm status | awk 'NR>1 {print $1}')
-    
-    # Check if pools are found
-    if [[ -z "$POOLS" ]]; then
-        log_error "No storage pools found. Please ensure your Proxmox VE storage is configured."
-        exit 1
-    fi
-    
-    # If only one pool exists, use it
-    if [[ $(echo "$POOLS" | wc -l) -eq 1 ]]; then
-        echo "$POOLS"
-        return 0
-    fi
-    
-    # If multiple pools, use dialog or whiptail
-    if command -v whiptail &>/dev/null; then
-        SELECTED_POOL=$(echo "$POOLS" | whiptail --title "Select Storage Pool" --menu \
-            "Choose a storage pool for the container:" 20 78 10 \
-            $(echo "$POOLS" | awk '{print NR " " $0}') 3>&1 1>&2 2>&3)
-    elif command -v dialog &>/dev/null; then
-        SELECTED_POOL=$(echo "$POOLS" | dialog --title "Select Storage Pool" --menu \
-            "Choose a storage pool for the container:" 20 78 10 \
-            $(echo "$POOLS" | awk '{print NR " " $0}') 2>&1 1>&3)
-    else
-        log_error "Neither whiptail nor dialog found. Please manually specify a storage pool."
-        exit 1
-    fi
-    
-    # Exit if canceled
-    if [[ -z "$SELECTED_POOL" ]]; then
-        log_error "Storage pool selection canceled."
-        exit 1
-    fi
-    
-    # Extract the selected storage pool
-    echo "$POOLS" | awk "NR==$SELECTED_POOL"
-}
+# Select template and container storage
+TEMPLATE_STORAGE=$(select_storage template) || exit
+msg_ok "Using ${BL}$TEMPLATE_STORAGE${CL} ${GN}for Template Storage."
 
-# Ensure script is run as root
-if [[ $EUID -ne 0 ]]; then
-   log_error "This script must be run as root on a Proxmox VE host"
-   exit 1
+CONTAINER_STORAGE=$(select_storage container) || exit
+msg_ok "Using ${BL}$CONTAINER_STORAGE${CL} ${GN}for Container Storage."
+
+# Update LXC template list
+msg_info "Updating LXC Template List"
+pveam update >/dev/null
+msg_ok "Updated LXC Template List"
+
+# Get LXC template string
+TEMPLATE_SEARCH=${PCT_OSTYPE}-${PCT_OSVERSION:-}
+mapfile -t TEMPLATES < <(pveam available -section system | sed -n "s/.*\($TEMPLATE_SEARCH.*\)/\1/p" | sort -t - -k 2 -V)
+[ ${#TEMPLATES[@]} -gt 0 ] || exit "Unable to find a template when searching for '$TEMPLATE_SEARCH'."
+TEMPLATE="${TEMPLATES[-1]}"
+
+# Download LXC template if needed
+if ! pveam list $TEMPLATE_STORAGE | grep -q $TEMPLATE; then
+  msg_info "Downloading LXC Template"
+  pveam download $TEMPLATE_STORAGE $TEMPLATE >/dev/null ||
+    exit "A problem occurred while downloading the LXC template."
+  msg_ok "Downloaded LXC Template"
 fi
 
-# Get the selected storage pool
-STORAGE_POOL=$(select_storage_pool)
-log_info "Selected storage pool: $STORAGE_POOL"
-
-# Find an available container ID
-CT_ID=$(find_next_available_ctid)
-log_info "Using container ID: $CT_ID"
-
-# Ensure storage pool is valid and exists
-if ! pvesm status | grep -q "^$STORAGE_POOL "; then
-    log_error "Selected storage pool does not exist or is invalid!"
-    exit 1
-fi
-
-# Function to build the container
-build_container() {
-    local HN="crafty-container"
-    
-    # Generate a random, secure password
-    PASSWORD=$(openssl rand -base64 12)
-    
-    # Create the container
-    pct create "$CT_ID" "$STORAGE_POOL:debian-12-standard_12.7-1_amd64.tar.zst" \
-        --hostname "$HN" \
-        --rootfs "$STORAGE_POOL:${VAR_DISK}G" \
-        --cores "$VAR_CPU" \
-        --memory "$VAR_RAM" \
-        --net0 "bridge=vmbr0,name=eth0,ip=dhcp" \
-        --password "$PASSWORD" \
-        --unprivileged 1
-    
-    # Check if container creation was successful
-    if [ $? -ne 0 ]; then
-        log_error "Failed to create container"
-        exit 1
-    fi
-    
-    # Start the container
-    pct start "$CT_ID"
-    
-    # Check if container start was successful
-    if [ $? -ne 0 ]; then
-        log_error "Failed to start container"
-        exit 1
-    fi
-    
-    log_info "Container root password: $PASSWORD"
-    log_info "Please change this password after first login!"
-}
-
-# Build and install
-build_container
-
-log_info "${APP} LXC Container Installation Completed Successfully!"
+# Build the container
+msg_info "Creating LXC Container"
+pct create $CTID ${TEMPLATE_STORAGE}:vztmpl/${TEMPLATE} -rootfs $CONTAINER_STORAGE:20G -cores 2 -memory 2048 -net0 bridge=vmbr0,name=eth0,ip=dhcp --password $(openssl rand -base64 12) --unprivileged 1 >/dev/null ||
+  exit "A problem occurred while trying to create container."
+msg_ok "LXC Container ${BL}$CTID${CL} ${GN}was successfully created."
