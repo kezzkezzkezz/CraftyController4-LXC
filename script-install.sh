@@ -14,9 +14,28 @@ HOLD=" "
 set -Eeuo pipefail
 trap 'error_handler $LINENO "$BASH_COMMAND"' ERR
 
-# Initialize SPINNER_PID
-SPINNER_PID="${SPINNER_PID:-}"
+SPINNER_PID=""
 
+# The spinner function should now check if the process is running
+function spinner() {
+    local chars="/-\|"
+    local spin_i=0
+    printf "\e[?25l"
+    while true; do
+        printf "\r \e[36m%s\e[0m" "${chars:spin_i++%${#chars}:1}"
+        sleep 0.1
+    done
+}
+
+# Update function for msg_info
+function msg_info() {
+  local msg="$1"
+  echo -ne " ${HOLD} ${YW}${msg}   "
+  spinner &
+  SPINNER_PID=$!
+}
+
+# Update the error handler to stop the spinner correctly
 function error_handler() {
     if [ -n "$SPINNER_PID" ] && ps -p $SPINNER_PID > /dev/null; then kill $SPINNER_PID > /dev/null; fi
     printf "\e[?25h"
@@ -26,6 +45,7 @@ function error_handler() {
     local error_message="${RD}[ERROR]${CL} in line ${RD}$line_number${CL}: exit code ${RD}$exit_code${CL}: while executing command ${YW}$command${CL}"
     echo -e "\n$error_message\n"
 }
+
 
 function spinner() {
     local chars="/-\|"
