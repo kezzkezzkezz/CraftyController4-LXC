@@ -7,25 +7,21 @@ validate_ctid() {
     
     # Validate that CTID is a number
     if ! [[ "$CTID" =~ ^[0-9]+$ ]]; then
-        echo "Error: Container ID must be a number."
         return 1
-    fi  # Correctly close the if condition
-
+    fi
+    
     # Ensure ID is at least 100
     if [ "$CTID" -lt 100 ]; then
-        echo "Error: Container ID cannot be less than 100."
         return 1
     fi
     
     # Ensure ID is no more than 999
     if [ "$CTID" -gt 999 ]; then
-        echo "Error: Container ID cannot be greater than 999."
         return 1
     fi
     
     # Check if ID is already in use
     if pct status "$CTID" &>/dev/null; then
-        echo "Error: Container ID $CTID is already in use."
         return 1
     fi
     
