@@ -30,19 +30,17 @@ find_next_available_ctid() {
     local max_id=999
     
     for ((id=start_id; id<=max_id; id++)); do
-        # Validate ID is a number and in range
-        if [[ "$id" =~ ^[0-9]+$ ]] && [ "$id" -ge "$start_id" ] && [ "$id" -le "$max_id" ]; then
-            # Check if the ID is not in use
-            if ! is_ctid_in_use "$id"; then
-                echo "$id"
-                return 0
-            fi
+        # Check if the ID is not in use
+        if ! is_ctid_in_use "$id"; then
+            echo "$id"
+            return 0
         fi
     done
     
     log_error "No available container IDs found between $start_id and $max_id!"
     exit 1
 }
+
 
 
 # Configuration variables
