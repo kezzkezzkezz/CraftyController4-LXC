@@ -55,8 +55,18 @@ function msg_error() {
   echo -e "${BFR} ${CROSS} ${RD}${msg}${CL}"
 }
 
+# Auto-detect the next available CTID
+CTID=$(pct list | awk 'NR > 1 {print $1}' | sort -n | tail -n 1)
+CTID=$((CTID + 1))
+
+# Ensure CTID is at least 100
+if [ "$CTID" -lt 100 ]; then
+  CTID=100
+fi
+
+echo "Using CTID: $CTID"
+
 # Validate required variables
-[[ "${CTID:-}" ]] || exit "You need to set 'CTID' variable."
 [[ "${PCT_OSTYPE:-}" ]] || exit "You need to set 'PCT_OSTYPE' variable."
 
 # Validate ID
