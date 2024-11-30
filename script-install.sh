@@ -16,7 +16,7 @@ is_ctid_in_use() {
     
     # Check across all nodes using pct list
     for NODE in $(pvecm nodes | awk 'NR>1 {print $1}'); do
-        if pct list -n "$NODE" | awk '{print $1}' | grep -q "^$CTID$"; then
+        if pct list "$NODE" | awk '{print $1}' | grep -q "^$CTID$"; then
             return 0  # Container with this ID exists on the node
         fi
     done
