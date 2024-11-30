@@ -14,14 +14,12 @@ log_info() {
 is_ctid_in_use() {
     local CTID="$1"
     
-    # Check across all nodes using qm list and pct list
-    if qm list | awk '{print $1}' | grep -q "^$CTID$" 2>/dev/null; then
-        return 0  # VM with this ID exists
-    fi
-    
-    if pct list | awk '{print $1}' | grep -q "^$CTID$" 2>/dev/null; then
-        return 0  # Container with this ID exists
-    fi
+    # Check across all nodes using pct list
+    for NODE in $(pvecm nodes | awk 'NR>1 {print $1}'); do
+        if pct list -n "$NODE" | awk '{print $1}' | grep -q "^$CTID$"; then
+            return 0  # Container with this ID exists on the node
+        fi
+    done
     
     return 1  # ID is available
 }
@@ -45,6 +43,7 @@ find_next_available_ctid() {
     log_error "No available container IDs found between $start_id and $max_id!"
     exit 1
 }
+
 
 # Configuration variables
 APP="Crafty"
