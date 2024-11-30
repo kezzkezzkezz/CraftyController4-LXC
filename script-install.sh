@@ -10,46 +10,39 @@ log_info() {
     echo "[INFO] $1"
 }
 
-# Validate Container ID
-validate_ctid() {
+# Function to check if a container ID is in use across all Proxmox nodes
+is_ctid_in_use() {
     local CTID="$1"
     
-    # Validate that CTID is a number
-    if ! [[ "$CTID" =~ ^[0-9]+$ ]]; then
-        log_error "Invalid CTID: must be a number"
-        return 1
+    # Check across all nodes using qm list and pct list
+    if qm list | awk '{print $1}' | grep -q "^$CTID$" 2>/dev/null; then
+        return 0  # VM with this ID exists
     fi
     
-    # Ensure ID is at least 100
-    if [ "$CTID" -lt 100 ]; then
-        log_error "CTID must be at least 100"
-        return 1
+    if pct list | awk '{print $1}' | grep -q "^$CTID$" 2>/dev/null; then
+        return 0  # Container with this ID exists
     fi
     
-    # Ensure ID is no more than 999
-    if [ "$CTID" -gt 999 ]; then
-        log_error "CTID must be no more than 999"
-        return 1
-    fi
-    
-    # Check if ID is already in use
-    if pct status "$CTID" &>/dev/null; then
-        log_error "Container ID $CTID is already in use"
-        return 1
-    fi
-    
-    return 0
+    return 1  # ID is available
 }
 
-# Function to find a unique container ID
-find_next_ct_id() {
-    for id in $(seq 100 999); do
-        if validate_ctid "$id"; then
-            echo "$id"
-            return 0
+# Function to find a unique container ID across all nodes
+find_next_available_ctid() {
+    local start_id=100
+    local max_id=999
+    
+    for ((id=start_id; id<=max_id; id++)); do
+        # Validate ID is a number and in range
+        if [[ "$id" =~ ^[0-9]+$ ]] && [ "$id" -ge "$start_id" ] && [ "$id" -le "$max_id" ]; then
+            # Check if the ID is not in use
+            if ! is_ctid_in_use "$id"; then
+                echo "$id"
+                return 0
+            fi
         fi
     done
-    log_error "No available container IDs found!"
+    
+    log_error "No available container IDs found between $start_id and $max_id!"
     exit 1
 }
 
@@ -112,7 +105,7 @@ STORAGE_POOL=$(select_storage_pool)
 log_info "Selected storage pool: $STORAGE_POOL"
 
 # Find an available container ID
-CT_ID=$(find_next_ct_id)
+CT_ID=$(find_next_available_ctid)
 log_info "Using container ID: $CT_ID"
 
 # Ensure storage pool is valid and exists
@@ -128,6 +121,7 @@ build_container() {
     # Generate a random, secure password
     PASSWORD=$(openssl rand -base64 12)
     
+    # Create the container
     pct create "$CT_ID" "$STORAGE_POOL:debian-12-standard_12.7-1_amd64.tar.zst" \
         --hostname "$HN" \
         --rootfs "$STORAGE_POOL:${VAR_DISK}G" \
