@@ -55,18 +55,20 @@ function msg_error() {
   echo -e "${BFR} ${CROSS} ${RD}${msg}${CL}"
 }
 
-# Auto-detect the next available CTID
-CTID=$(pct list | awk 'NR > 1 {print $1}' | sort -n | tail -n 1)
-CTID=$((CTID + 1))
+# Auto-detect CTID
+CTID=$(pvesh get /cluster/nextid)
+[[ -z "$CTID" ]] && exit "Failed to detect next available CTID."
 
-# Ensure CTID is at least 100
-if [ "$CTID" -lt 100 ]; then
-  CTID=100
-fi
+msg_ok "Using CTID: ${BL}$CTID${CL}"
 
-echo "Using CTID: $CTID"
+# Auto-detect available PCT_OSTYPE
+PCT_OSTYPE=$(pveam available | awk '{print $1}' | head -n 1)
+[[ -z "$PCT_OSTYPE" ]] && exit "No valid PCT_OSTYPE found."
+
+msg_ok "Using PCT_OSTYPE: ${BL}$PCT_OSTYPE${CL}"
 
 # Validate required variables
+[[ "${CTID:-}" ]] || exit "You need to set 'CTID' variable."
 [[ "${PCT_OSTYPE:-}" ]] || exit "You need to set 'PCT_OSTYPE' variable."
 
 # Validate ID
