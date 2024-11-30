@@ -9,7 +9,7 @@ validate_ctid() {
     if ! [[ "$CTID" =~ ^[0-9]+$ ]]; then
         echo "Error: Container ID must be a number."
         return 1
-    fi  
+    fi
     
     # Ensure ID is at least 100
     if [ "$CTID" -lt 100 ]; then
