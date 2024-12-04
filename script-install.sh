@@ -21,36 +21,7 @@ EOF
 }
 
 header_info
-
-# Define missing functions
-function msg_info() {
-    echo -e "\033[1;34m[INFO]\033[0m $1"
-}
-
-function msg_ok() {
-    echo -e "\033[1;32m[OK]\033[0m $1"
-}
-
-function msg_error() {
-    echo -e "\033[1;31m[ERROR]\033[0m $1"
-}
-
-function color() {
-    BL="\033[1;34m"
-    CL="\033[0m"
-}
-
-function catch_errors() {
-    trap 'msg_error "An error occurred. Exiting..."; exit 1' ERR
-}
-
-function variables() {
-    NEXTID=$(pct list | awk '{print $1}' | sort -n | tail -n 1)
-    NEXTID=$((NEXTID + 1))
-    NSAPP="crafty-${NEXTID}"
-}
-
-# Define settings
+echo -e "Loading..."
 APP="Crafty"
 var_disk="20"
 var_cpu="2"
