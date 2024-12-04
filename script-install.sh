@@ -146,7 +146,7 @@ msg_ok "Logical volume 'vm-${CTID}-disk-0' created."
 
 # Create LXC container on local-lvm
 msg_info "Creating LXC Container"
-pct create "$CTID" "${TEMPLATE_STORAGE}:vztmpl/${TEMPLATE}" -rootfs "pve:vm-${CTID}-disk-0" -cores 4 -memory 2048 \
+pct create "$CTID" "${TEMPLATE_STORAGE}:vztmpl/${TEMPLATE}" -rootfs "local-lvm:vm-${CTID}-disk-0" -cores 4 -memory 2048 \
 -net0 bridge=vmbr0,name=eth0,ip=dhcp --unprivileged 1 >/dev/null
 if [ $? -ne 0 ]; then
     msg_error "Failed to create container with CTID ${CTID}."
