@@ -164,10 +164,10 @@ function select_storage() {
 }
 
 # Select template and container storage
-TEMPLATE_STORAGE=$(select_storage template) || exit
+TEMPLATE_STORAGE=$(select_storage template) || exit 1
 msg_ok "Using ${BL}$TEMPLATE_STORAGE${CL} ${GN}for Template Storage."
 
-CONTAINER_STORAGE=$(select_storage container) || exit
+CONTAINER_STORAGE=$(select_storage container) || exit 1
 msg_ok "Using ${BL}$CONTAINER_STORAGE${CL} ${GN}for Container Storage."
 
 # Update LXC template list
@@ -175,22 +175,44 @@ msg_info "Updating LXC Template List"
 pveam update >/dev/null
 msg_ok "Updated LXC Template List"
 
-# Get LXC template string
+# Construct LXC template search string
 TEMPLATE_SEARCH=${PCT_OSTYPE}${PCT_OSVERSION:+-$PCT_OSVERSION}
+msg_info "Searching for templates matching: $TEMPLATE_SEARCH"
+
+# Fetch available templates
 mapfile -t TEMPLATES < <(pveam available -section system | sed -n "s/.*\($TEMPLATE_SEARCH.*\)/\1/p" | sort -t - -k 2 -V)
-[ ${#TEMPLATES[@]} -gt 0 ] || { echo "Unable to find a template when searching for '$TEMPLATE_SEARCH'."; exit 1; }
 
+if [ ${#TEMPLATES[@]} -eq 0 ]; then
+    echo "ERROR: No templates found for search '${TEMPLATE_SEARCH}'. Check PCT_OSTYPE (${PCT_OSTYPE}) and PCT_OSVERSION (${PCT_OSVERSION})."
+    exit 1
+fi
 
-# Download LXC template if needed
-if ! pveam list $TEMPLATE_STORAGE | grep -q $TEMPLATE; then
-  msg_info "Downloading LXC Template"
-  pveam download $TEMPLATE_STORAGE $TEMPLATE >/dev/null ||
-    exit "A problem occurred while downloading the LXC template."
-  msg_ok "Downloaded LXC Template"
+# Use the first template in the list
+TEMPLATE=${TEMPLATES[0]:-}
+if [ -z "$TEMPLATE" ]; then
+    echo "ERROR: TEMPLATE variable is unbound. No valid templates available."
+    exit 1
+fi
+msg_ok "Selected template: ${BL}${TEMPLATE}${CL}"
+
+# Download LXC template if not already present
+if ! pveam list "$TEMPLATE_STORAGE" | grep -q "$TEMPLATE"; then
+    msg_info "Downloading LXC Template: $TEMPLATE"
+    if ! pveam download "$TEMPLATE_STORAGE" "$TEMPLATE" >/dev/null; then
+        echo "ERROR: Failed to download LXC template '$TEMPLATE'."
+        exit 1
+    fi
+    msg_ok "Downloaded LXC Template"
+else
+    msg_ok "Template already exists in storage."
 fi
 
 # Build the container
 msg_info "Creating LXC Container"
-pct create $CTID ${TEMPLATE_STORAGE}:vztmpl/${TEMPLATE} -rootfs $CONTAINER_STORAGE:20G -cores 2 -memory 2048 -net0 bridge=vmbr0,name=eth0,ip=dhcp --password $(openssl rand -base64 12) --unprivileged 1 >/dev/null ||
-  exit "A problem occurred while trying to create container."
+if ! pct create "$CTID" "${TEMPLATE_STORAGE}:vztmpl/${TEMPLATE}" -rootfs "${CONTAINER_STORAGE}:20G" -cores 2 -memory 2048 \
+-net0 bridge=vmbr0,name=eth0,ip=dhcp --password "$(openssl rand -base64 12)" --unprivileged 1 >/dev/null; then
+    echo "ERROR: Failed to create container with CTID ${CTID}."
+    exit 1
+fi
 msg_ok "LXC Container ${BL}$CTID${CL} ${GN}was successfully created."
+
