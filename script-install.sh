@@ -46,24 +46,6 @@ function error_handler() {
     echo -e "\n$error_message\n"
 }
 
-
-function spinner() {
-    local chars="/-\|"
-    local spin_i=0
-    printf "\e[?25l"
-    while true; do
-        printf "\r \e[36m%s\e[0m" "${chars:spin_i++%${#chars}:1}"
-        sleep 0.1
-    done
-}
-
-function msg_info() {
-  local msg="$1"
-  echo -ne " ${HOLD} ${YW}${msg}   "
-  spinner &
-  SPINNER_PID=$!
-}
-
 function msg_ok() {
   if [ -n "$SPINNER_PID" ] && ps -p $SPINNER_PID > /dev/null; then kill $SPINNER_PID > /dev/null; fi
   printf "\e[?25h"
@@ -101,6 +83,15 @@ if pct status $CTID &>/dev/null; then
   msg_error "ID '$CTID' is already in use."
   unset CTID
   exit "Cannot use ID that is already in use."
+fi
+
+# Check if the logical volume pve/20G exists
+LV_PATH="/dev/pve/20G"
+if ! lvdisplay "$LV_PATH" &>/dev/null; then
+  # LV doesn't exist, create it
+  msg_info "Creating logical volume pve/20G"
+  lvcreate -L 20G -n 20G pve || exit "Failed to create logical volume pve/20G."
+  msg_ok "Created logical volume pve/20G"
 fi
 
 # Storage validation
@@ -215,4 +206,3 @@ if ! pct create "$CTID" "${TEMPLATE_STORAGE}:vztmpl/${TEMPLATE}" -rootfs "${CONT
     exit 1
 fi
 msg_ok "LXC Container ${BL}$CTID${CL} ${GN}was successfully created."
-
