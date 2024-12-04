@@ -85,80 +85,18 @@ if pct status $CTID &>/dev/null; then
   exit "Cannot use ID that is already in use."
 fi
 
-# Check if the logical volume pve/20G exists
-LV_PATH="/dev/pve/20G"
-if ! lvdisplay "$LV_PATH" &>/dev/null; then
-  # LV doesn't exist, create it
-  msg_info "Creating logical volume pve/20G"
-  lvcreate -L 20G -n 20G pve || exit "Failed to create logical volume pve/20G."
-  msg_ok "Created logical volume pve/20G"
-fi
-
-# Storage validation
-msg_info "Validating Storage"
-VALIDCT=$(pvesm status -content rootdir | awk 'NR>1')
-if [ -z "$VALIDCT" ]; then
-  msg_error "Unable to detect a valid Container Storage location."
+# Ensure local-lvm storage pool is available
+if ! pvesm status | grep -q "local-lvm"; then
+  msg_error "local-lvm storage pool is not available."
   exit 1
 fi
+msg_ok "Using local-lvm as storage."
 
-VALIDTMP=$(pvesm status -content vztmpl | awk 'NR>1')
-if [ -z "$VALIDTMP" ]; then
-  msg_error "Unable to detect a valid Template Storage location."
-  exit 1
-fi
-
-# Select storage function
-function select_storage() {
-  local CLASS=$1
-  local CONTENT
-  local CONTENT_LABEL
-  case $CLASS in
-  container)
-    CONTENT='rootdir'
-    CONTENT_LABEL='Container'
-    ;;
-  template)
-    CONTENT='vztmpl'
-    CONTENT_LABEL='Container template'
-    ;;
-  *) false || exit "Invalid storage class." ;;
-  esac
-  
-  # Query all storage locations
-  local -a MENU
-  while read -r line; do
-    local TAG=$(echo $line | awk '{print $1}')
-    local TYPE=$(echo $line | awk '{printf "%-10s", $2}')
-    local FREE=$(echo $line | numfmt --field 4-6 --from-unit=K --to=iec --format %.2f | awk '{printf( "%9sB", $6)}')
-    local ITEM="  Type: $TYPE Free: $FREE "
-    local OFFSET=2
-    if [[ $((${#ITEM} + $OFFSET)) -gt ${MSG_MAX_LENGTH:-} ]]; then
-      local MSG_MAX_LENGTH=$((${#ITEM} + $OFFSET))
-    fi
-    MENU+=("$TAG" "$ITEM" "OFF")
-  done < <(pvesm status -content $CONTENT | awk 'NR>1')
-  
-  # Select storage location
-  if [ $((${#MENU[@]}/3)) -eq 1 ]; then
-    printf ${MENU[0]}
-  else
-    local STORAGE
-    while [ -z "${STORAGE:+x}" ]; do
-      STORAGE=$(whiptail --backtitle "Proxmox VE Helper Scripts" --title "Storage Pools" --radiolist \
-      "Which storage pool would you like to use for the ${CONTENT_LABEL,,}?\n" \
-      16 $(($MSG_MAX_LENGTH + 23)) 6 \
-      "${MENU[@]}" 3>&1 1>&2 2>&3) || exit "Menu aborted."
-    done
-    printf $STORAGE
-  fi
-}
-
-# Select template and container storage
-TEMPLATE_STORAGE=$(select_storage template) || exit 1
+# Select storage and template (assuming local-lvm is selected directly)
+TEMPLATE_STORAGE="local-lvm"
 msg_ok "Using ${BL}$TEMPLATE_STORAGE${CL} ${GN}for Template Storage."
 
-CONTAINER_STORAGE=$(select_storage container) || exit 1
+CONTAINER_STORAGE="local-lvm"
 msg_ok "Using ${BL}$CONTAINER_STORAGE${CL} ${GN}for Container Storage."
 
 # Update LXC template list
@@ -206,6 +144,3 @@ if ! pct create "$CTID" "${TEMPLATE_STORAGE}:vztmpl/${TEMPLATE}" -rootfs "local-
     exit 1
 fi
 msg_ok "LXC Container ${BL}$CTID${CL} ${GN}was successfully created."
-
-
-
