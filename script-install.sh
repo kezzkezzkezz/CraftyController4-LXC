@@ -1,27 +1,15 @@
 #!/usr/bin/env bash
-source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/build.func)
-# Copyright (c) 2021-2024 tteck
-# Author: tteck (tteckster)
+source <(curl -s https://raw.githubusercontent.com/Fabacks/crafty-lxc/main/build.func)
+# Copyright (c) 2024
+# Author: Fabacks
 # License: MIT
-# https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
+# https://github.com/Fabacks/crafty-lxc/blob/main/LICENSE
 
-function header_info {
-clear
-cat <<"EOF"
-  ____            __ _            ____            _             _ _             _  _   
- / ___|_ __ __ _ / _| |_ _   _   / ___|___  _ __ | |_ _ __ ___ | | | ___ _ __  | || |  
-| |   | '__/ _` | |_| __| | | | | |   / _ \| '_ \| __| '__/ _ \| | |/ _ \ '__| | || |_ 
-| |___| | | (_| |  _| |_| |_| | | |__| (_) | | | | |_| | | (_) | | |  __/ |    |__   _|
- \____|_|  \__,_|_|  \__|\__, |  \____\___/|_| |_|\__|_|  \___/|_|_|\___|_|       |_|  
-                         |___/                                                         
-EOF
-}
-header_info
 echo -e "Loading..."
-APP="Crafty Controller"
-var_disk="2"
-var_cpu="1"
-var_ram="512"
+APP="Crafty"
+var_disk="20"
+var_cpu="2"
+var_ram="2048"
 var_os="debian"
 var_version="12"
 variables
@@ -29,81 +17,53 @@ color
 catch_errors
 
 function default_settings() {
-  CT_TYPE="1"
-  PW=""
-  CT_ID=$NEXTID
-  HN=$NSAPP
-  DISK_SIZE="$var_disk"
-  CORE_COUNT="$var_cpu"
-  RAM_SIZE="$var_ram"
-  BRG="vmbr0"
-  NET="dhcp"
-  GATE=""
-  APT_CACHER=""
-  APT_CACHER_IP=""
-  DISABLEIP6="no"
-  MTU=""
-  SD=""
-  NS=""
-  MAC=""
-  VLAN=""
-  SSH="no"
-  VERB="no"
-  echo_default
+    CT_TYPE="1"
+    PASSWORD=""
+    CT_ID=$NEXTID
+    HN=$NSAPP
+    DISK_SIZE="$var_disk"
+    CORE_COUNT="$var_cpu"
+    RAM_SIZE="$var_ram"
+    BRG="vmbr0"
+    NET="dhcp"
+    PORT=""
+    GATE=""
+    APT_CACHER=""
+    APT_CACHER_IP=""
+    DISABLEIP6="no"
+    MTU=""
+    SD=""
+    MAC=""
+    VLAN=""
+    SSH="no"
+    VERBOSE="no"
+    echo_default
 }
 
 function install_crafty() {
-  header_info
-  check_container_storage
-  check_container_resources
+    msg_info "Installing Crafty in the LXC container"
 
-  msg_info "Installing ${APP}"
-  
-  # Install necessary dependencies
-  apt update && apt install -y curl unzip git
+    # Update and upgrade packages in the container
+    pct exec $CT_ID -- bash -c "apt update && apt upgrade -y"
 
-  # Download Crafty Controller 4
-  cd /opt
-  git clone https://github.com/crafty-ctrl/crafty-controller.git
-  cd crafty-controller
+    # Install necessary dependencies: Git and OpenJDK 21
+    pct exec $CT_ID -- bash -c "apt install git openjdk-21-jdk -y"
 
-  # Install Crafty Controller dependencies
-  ./install.sh
-  
-  msg_ok "Crafty Controller Installation Complete"
+    # Clone Crafty installer repository
+    pct exec $CT_ID -- bash -c "git clone https://gitlab.com/crafty-controller/crafty-installer-4.0.git"
 
-  msg_info "Starting ${APP}"
-  systemctl enable crafty
-  systemctl start crafty
-  msg_ok "Started ${APP}"
+    # Change directory and run the install script
+    pct exec $CT_ID -- bash -c "cd crafty-installer-4.0 && sudo ./install_crafty.sh"
 
-  msg_ok "Installation Successful"
-  echo -e "${APP} should be reachable by going to the following URL: ${BL}http://${IP}:8000${CL}"
-}
-
-function update_crafty() {
-  header_info
-  check_container_storage
-  check_container_resources
-  if [[ ! -d /opt/crafty-controller ]]; then msg_error "No ${APP} Installation Found!"; exit; fi
-  msg_info "Stopping ${APP}"
-  systemctl stop crafty
-  msg_ok "Stopped ${APP}"
-
-  msg_info "Updating ${APP}"
-  cd /opt/crafty-controller
-  git pull origin main
-  msg_ok "Updated ${APP}"
-
-  msg_info "Starting ${APP}"
-  systemctl start crafty
-  msg_ok "Started ${APP}"
-  msg_ok "Updated Successfully"
-  exit
+    msg_ok "Crafty successfully installed"
 }
 
 start
 build_container
+default_settings
 description
+install_crafty
 
 msg_ok "Completed Successfully!\n"
+echo -e "${APP} should be reachable by going to the following URL.
+         ${BL}http://${IP}:8000${CL} \n"
