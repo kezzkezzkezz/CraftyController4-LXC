@@ -5,6 +5,18 @@ source <(curl -s https://raw.githubusercontent.com/Fabacks/crafty-lxc/main/build
 # License: MIT
 # https://github.com/Fabacks/crafty-lxc/blob/main/LICENSE
 
+function header_info {
+clear
+cat <<"EOF"
+  ____            __ _            ____            _             _ _             _  _   
+ / ___|_ __ __ _ / _| |_ _   _   / ___|___  _ __ | |_ _ __ ___ | | | ___ _ __  | || |  
+| |   | '__/ _` | |_| __| | | | | |   / _ \| '_ \| __| '__/ _ \| | |/ _ \ '__| | || |_ 
+| |___| | | (_| |  _| |_| |_| | | |__| (_) | | | | |_| | | (_) | | |  __/ |    |__   _|
+ \____|_|  \__,_|_|  \__|\__, |  \____\___/|_| |_|\__|_|  \___/|_|_|\___|_|       |_|  
+                         |___/                                                         
+EOF
+}
+header_info
 echo -e "Loading..."
 APP="Crafty"
 var_disk="20"
