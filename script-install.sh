@@ -8,11 +8,15 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 function header_info {
 clear
 cat <<"EOF"
-   ____ _          ____ _           ____              _     
-  / ___| |__   ___| __ ) | ___ _ __|  _ \ _ __ ___   / \    
- | |   | '_ \ / _ \  _ \ |/ _ \ '__| |_) | '_ ` _ \ / _ \   
- | |___| | | |  __/ |_) | |  __/ |  |  __/| | | | | / ___ \  
-  \____|_| |_|\___|____/|_|\___|_|  |_|   |_| |_| |_/_/   \_\
+  ____            __ _                                 
+ / ___|_ __ __ _ / _| |_ _   _                         
+| |   | '__/ _` | |_| __| | | |                        
+| |___| | | (_| |  _| |_| |_| |                        
+ \____|_|  \__,_|_|  \__|\__, | _ _             _  _   
+ / ___|___  _ __ | |_ _ _|___/ | | | ___ _ __  | || |  
+| |   / _ \| '_ \| __| '__/ _ \| | |/ _ \ '__| | || |_ 
+| |__| (_) | | | | |_| | | (_) | | |  __/ |    |__   _|
+ \____\___/|_| |_|\__|_|  \___/|_|_|\___|_|       |_|  
 EOF
 }
 header_info
@@ -77,7 +81,7 @@ function install_crafty() {
   msg_ok "Started ${APP}"
 
   msg_ok "Installation Successful"
-  echo -e "${APP} should be reachable by going to the following URL: ${BL}http://<Your-Server-IP>:8080${CL}"
+  echo -e "${APP} should be reachable by going to the following URL: ${BL}http://${IP}:8000${CL}"
 }
 
 function update_crafty() {
