@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Ensure that the external functions are sourced properly
-source <(curl -s https://raw.githubusercontent.com/Fabacks/crafty-lxc/main/build.func)
+source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/build.func)
 
 # Copyright (c) 2024
 # Author: Fabacks
