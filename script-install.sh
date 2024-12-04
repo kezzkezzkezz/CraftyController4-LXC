@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Ensure that the external functions are sourced properly
 source <(curl -s https://raw.githubusercontent.com/Fabacks/crafty-lxc/main/build.func)
 
 # Copyright (c) 2024
@@ -6,6 +7,7 @@ source <(curl -s https://raw.githubusercontent.com/Fabacks/crafty-lxc/main/build
 # License: MIT
 # https://github.com/Fabacks/crafty-lxc/blob/main/LICENSE
 
+# Display header with ASCII art
 function header_info {
     clear
     cat <<"EOF"
@@ -20,7 +22,7 @@ EOF
 
 header_info
 
-# Define missing functions and variables
+# Define missing functions
 function msg_info() {
     echo -e "\033[1;34m[INFO]\033[0m $1"
 }
@@ -56,6 +58,7 @@ var_ram="2048"
 var_os="debian"
 var_version="12"
 
+# Default settings for container
 function default_settings() {
     CT_TYPE="1"
     PASSWORD=""
@@ -79,7 +82,7 @@ function default_settings() {
     VERBOSE="no"
 }
 
-# Function to install Crafty
+# Function to install Crafty inside the container
 function install_crafty() {
     msg_info "Installing Crafty in the LXC container"
 
@@ -110,6 +113,7 @@ function build_container() {
 }
 
 # Run installation process
+variables
 start
 build_container
 default_settings
