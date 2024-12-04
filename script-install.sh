@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 source <(curl -s https://raw.githubusercontent.com/Fabacks/crafty-lxc/main/build.func)
+
 # Copyright (c) 2024
 # Author: Fabacks
 # License: MIT
 # https://github.com/Fabacks/crafty-lxc/blob/main/LICENSE
 
 function header_info {
-clear
-cat <<"EOF"
+    clear
+    cat <<"EOF"
   ____            __ _            ____            _             _ _             _  _   
  / ___|_ __ __ _ / _| |_ _   _   / ___|___  _ __ | |_ _ __ ___ | | | ___ _ __  | || |  
 | |   | '__/ _` | |_| __| | | | | |   / _ \| '_ \| __| '__/ _ \| | |/ _ \ '__| | || |_ 
@@ -16,17 +17,44 @@ cat <<"EOF"
                          |___/                                                         
 EOF
 }
+
 header_info
-echo -e "Loading..."
+
+# Define missing functions and variables
+function msg_info() {
+    echo -e "\033[1;34m[INFO]\033[0m $1"
+}
+
+function msg_ok() {
+    echo -e "\033[1;32m[OK]\033[0m $1"
+}
+
+function msg_error() {
+    echo -e "\033[1;31m[ERROR]\033[0m $1"
+}
+
+function color() {
+    BL="\033[1;34m"
+    CL="\033[0m"
+}
+
+function catch_errors() {
+    trap 'msg_error "An error occurred. Exiting..."; exit 1' ERR
+}
+
+function variables() {
+    NEXTID=$(pct list | awk '{print $1}' | sort -n | tail -n 1)
+    NEXTID=$((NEXTID + 1))
+    NSAPP="crafty-${NEXTID}"
+}
+
+# Define settings
 APP="Crafty"
 var_disk="20"
 var_cpu="2"
 var_ram="2048"
 var_os="debian"
 var_version="12"
-variables
-color
-catch_errors
 
 function default_settings() {
     CT_TYPE="1"
@@ -49,9 +77,9 @@ function default_settings() {
     VLAN=""
     SSH="no"
     VERBOSE="no"
-    echo_default
 }
 
+# Function to install Crafty
 function install_crafty() {
     msg_info "Installing Crafty in the LXC container"
 
@@ -70,12 +98,23 @@ function install_crafty() {
     msg_ok "Crafty successfully installed"
 }
 
+# Function to start the installation process
+function start() {
+    echo -e "Starting Crafty installation process..."
+}
+
+# Function to build the LXC container
+function build_container() {
+    pct create $CT_ID /var/lib/vz/template/cache/debian-${var_version}-amd64.tar.gz -storage local -net0 name=eth0,bridge=$BRG,ip=$NET
+    pct start $CT_ID
+}
+
+# Run installation process
 start
 build_container
 default_settings
-description
 install_crafty
 
 msg_ok "Completed Successfully!\n"
-echo -e "${APP} should be reachable by going to the following URL.
-         ${BL}http://${IP}:8000${CL} \n"
+echo -e "${APP} should be reachable by going to the following URL: \n"
+echo -e "${BL}http://${IP}:8000${CL} \n"
