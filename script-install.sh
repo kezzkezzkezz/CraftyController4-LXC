@@ -1,105 +1,108 @@
-#!/bin/bash
+#!/usr/bin/env bash
+source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/build.func)
+# Copyright (c) 2021-2024 tteck
+# Author: tteck (tteckster)
+# License: MIT
+# https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 
-# Display messages
-msg_info() {
-  echo "[INFO] $1"
+function header_info {
+clear
+cat <<"EOF"
+   ____ _          ____ _           ____              _     
+  / ___| |__   ___| __ ) | ___ _ __|  _ \ _ __ ___   / \    
+ | |   | '_ \ / _ \  _ \ |/ _ \ '__| |_) | '_ ` _ \ / _ \   
+ | |___| | | |  __/ |_) | |  __/ |  |  __/| | | | | / ___ \  
+  \____|_| |_|\___|____/|_|\___|_|  |_|   |_| |_| |_/_/   \_\
+EOF
+}
+header_info
+echo -e "Loading..."
+APP="Crafty Controller"
+var_disk="2"
+var_cpu="1"
+var_ram="512"
+var_os="debian"
+var_version="12"
+variables
+color
+catch_errors
+
+function default_settings() {
+  CT_TYPE="1"
+  PW=""
+  CT_ID=$NEXTID
+  HN=$NSAPP
+  DISK_SIZE="$var_disk"
+  CORE_COUNT="$var_cpu"
+  RAM_SIZE="$var_ram"
+  BRG="vmbr0"
+  NET="dhcp"
+  GATE=""
+  APT_CACHER=""
+  APT_CACHER_IP=""
+  DISABLEIP6="no"
+  MTU=""
+  SD=""
+  NS=""
+  MAC=""
+  VLAN=""
+  SSH="no"
+  VERB="no"
+  echo_default
 }
 
-msg_error() {
-  echo "[ERROR] $1"
-  exit 1
-}
+function install_crafty() {
+  header_info
+  check_container_storage
+  check_container_resources
 
-# This checks for the presence of valid Container Storage and Template Storage locations
-msg_info "Validating Storage"
-VALIDCT=$(pvesm status -content rootdir | awk 'NR>1')
-if [ -z "$VALIDCT" ]; then
-  msg_error "Unable to detect a valid Container Storage location."
-  exit 1
-fi
-
-VALIDTMP=$(pvesm status -content vztmpl | awk 'NR>1')
-if [ -z "$VALIDTMP" ]; then
-  msg_error "Unable to detect a valid Template Storage location."
-  exit 1
-fi
-
-# This function is used to select the storage class and determine the corresponding storage content type and label.
-function select_storage() {
-  local CLASS=$1
-  local CONTENT
-  local CONTENT_LABEL
-  case $CLASS in
-  container)
-    CONTENT='rootdir'
-    CONTENT_LABEL='Container'
-    ;;
-  template)
-    CONTENT='vztmpl'
-    CONTENT_LABEL='Container template'
-    ;;
-  *) false || exit "Invalid storage class." ;;
-  esac
+  msg_info "Installing ${APP}"
   
-  # This Queries all storage locations
-  local -a MENU
-  while read -r line; do
-    local TAG=$(echo $line | awk '{print $1}')
-    local TYPE=$(echo $line | awk '{printf "%-10s", $2}')
-    local FREE=$(echo $line | numfmt --field 4-6 --from-unit=K --to=iec --format %.2f | awk '{printf( "%9sB", $6)}')
-    local ITEM="  Type: $TYPE Free: $FREE "
-    local OFFSET=2
-    if [[ $((${#ITEM} + $OFFSET)) -gt ${MSG_MAX_LENGTH:-} ]]; then
-      local MSG_MAX_LENGTH=$((${#ITEM} + $OFFSET))
-    fi
-    MENU+=("$TAG" "$ITEM" "OFF")
-  done < <(pvesm status -content $CONTENT | awk 'NR>1')
+  # Install necessary dependencies
+  apt update && apt install -y curl unzip git
+
+  # Download Crafty Controller 4
+  cd /opt
+  git clone https://github.com/crafty-ctrl/crafty-controller.git
+  cd crafty-controller
+
+  # Install Crafty Controller dependencies
+  ./install.sh
   
-  # Select storage location
-  if [ $((${#MENU[@]}/3)) -eq 1 ]; then
-    printf ${MENU[0]}
-  else
-    local STORAGE
-    while [ -z "${STORAGE:+x}" ]; do
-      STORAGE=$(whiptail --backtitle "Proxmox VE Helper Scripts" --title "Storage Pools" --radiolist \
-      "Which storage pool you would like to use for the ${CONTENT_LABEL,,}?\nTo make a selection, use the Spacebar.\n" \
-      16 $(($MSG_MAX_LENGTH + 23)) 6 \
-      "${MENU[@]}" 3>&1 1>&2 2>&3) || exit "Menu aborted."
-    done
-    printf $STORAGE
-  fi
+  msg_ok "Crafty Controller Installation Complete"
+
+  msg_info "Starting ${APP}"
+  systemctl enable crafty
+  systemctl start crafty
+  msg_ok "Started ${APP}"
+
+  msg_ok "Installation Successful"
+  echo -e "${APP} should be reachable by going to the following URL: ${BL}http://<Your-Server-IP>:8080${CL}"
 }
 
-# Select storage for containers and templates
-CONTAINER_STORAGE=$(select_storage container)
-TEMPLATE_STORAGE=$(select_storage template)
+function update_crafty() {
+  header_info
+  check_container_storage
+  check_container_resources
+  if [[ ! -d /opt/crafty-controller ]]; then msg_error "No ${APP} Installation Found!"; exit; fi
+  msg_info "Stopping ${APP}"
+  systemctl stop crafty
+  msg_ok "Stopped ${APP}"
 
-# Output the selected storage for confirmation
-msg_info "Using Container Storage: $CONTAINER_STORAGE"
-msg_info "Using Template Storage: $TEMPLATE_STORAGE"
+  msg_info "Updating ${APP}"
+  cd /opt/crafty-controller
+  git pull origin main
+  msg_ok "Updated ${APP}"
 
-# Container setup variables
-CTID=125
-TEMPLATE="debian-12-standard_12.7-1_amd64.tar.zst"
+  msg_info "Starting ${APP}"
+  systemctl start crafty
+  msg_ok "Started ${APP}"
+  msg_ok "Updated Successfully"
+  exit
+}
 
-msg_info "Creating LXC Container $CTID using template $TEMPLATE"
-# Create the container using the selected storage locations
-pct create "$CTID" "${TEMPLATE_STORAGE}:vztmpl/${TEMPLATE}" -rootfs "$CONTAINER_STORAGE:vm-${CTID}-disk-0" -cores 4 -memory 2048 -net0 bridge=vmbr0,name=eth0,ip=dhcp --unprivileged 1
+start
+build_container
+description
 
-# Wait for the container to start
-msg_info "Waiting for the container to start..."
-pct start $CTID
-sleep 5  # Allow the container some time to start
-
-# Install Crafty Controller in the container
-msg_info "Installing Crafty Controller in the container"
-
-# Define the install script URL
-INSTALL_URL="https://raw.githubusercontent.com/kezzkezzkezz/CraftyController4-LXC/main/script-install.sh"
-
-# Execute the installation script inside the container
-pct exec "$CTID" -- bash -c "$(wget -qO- $INSTALL_URL)"
-
-# Confirmation message
-msg_info "Crafty Controller installation complete in container $CTID."
-
+msg_ok "Completed Successfully!\n"
