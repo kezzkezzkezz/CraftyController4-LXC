@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 
 # Logging and spinner setup
-YW=$(echo "\033[33m")
-BL=$(echo "\033[36m")
-RD=$(echo "\033[01;31m")
-GN=$(echo "\033[1;92m")
-CL=$(echo "\033[m")
-CM="${GN}✓${CL}"
+YW='\033[33m'
+BL='\033[36m'
+RD='\033[01;31m'
+GN='\033[1;92m'
+CL='\033[m'
+CM='${GN}✓${CL}'
 CROSS="${RD}✗${CL}"
 BFR="\\r\\033[K"
 HOLD=" "
@@ -62,7 +62,7 @@ function msg_error() {
 
 # Auto-detect CTID
 CTID=$(pvesh get /cluster/nextid)
-[[ -z "$CTID" ]] && exit "Failed to detect next available CTID."
+[[ -z "$CTID" ]] && { echo "Failed to detect next available CTID."; exit 1; }
 
 msg_ok "Using CTID: ${BL}$CTID${CL}"
 
