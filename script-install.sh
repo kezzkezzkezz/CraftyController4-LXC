@@ -138,7 +138,7 @@ fi
 
 # Create LXC container on local-lvm
 msg_info "Creating LXC Container"
-if ! pct create "$CTID" "${TEMPLATE_STORAGE}:vztmpl/${TEMPLATE}" -rootfs "local-lvm:20G" -cores 4 -memory 2048 \
+pct create "$CTID" "${TEMPLATE_STORAGE}:vztmpl/${TEMPLATE}" -rootfs "local-lvm:20G" -cores 4 -memory 2048 \
 -net0 bridge=vmbr0,name=eth0,ip=dhcp --unprivileged 1 >/dev/null; then
     echo "ERROR: Failed to create container with CTID ${CTID}."
     exit 1
