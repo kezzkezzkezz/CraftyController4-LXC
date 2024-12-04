@@ -1,16 +1,13 @@
 #!/usr/bin/env bash
-# Ensure that the external functions are sourced properly
 source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/build.func)
-
-# Copyright (c) 2024
-# Author: Fabacks
+# Copyright (c) 2021-2024 tteck
+# Author: tteck (tteckster)
 # License: MIT
-# https://github.com/Fabacks/crafty-lxc/blob/main/LICENSE
+# https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 
-# Display header with ASCII art
 function header_info {
-    clear
-    cat <<"EOF"
+clear
+cat <<"EOF"
   ____            __ _            ____            _             _ _             _  _   
  / ___|_ __ __ _ / _| |_ _   _   / ___|___  _ __ | |_ _ __ ___ | | | ___ _ __  | || |  
 | |   | '__/ _` | |_| __| | | | | |   / _ \| '_ \| __| '__/ _ \| | |/ _ \ '__| | || |_ 
@@ -19,7 +16,6 @@ function header_info {
                          |___/                                                         
 EOF
 }
-
 header_info
 echo -e "Loading..."
 APP="Crafty"
@@ -28,11 +24,13 @@ var_cpu="2"
 var_ram="2048"
 var_os="debian"
 var_version="12"
+variables
+color
+catch_errors
 
-# Default settings for container
 function default_settings() {
     CT_TYPE="1"
-    PASSWORD=""
+    PW=""
     CT_ID=$NEXTID
     HN=$NSAPP
     DISK_SIZE="$var_disk"
@@ -40,7 +38,6 @@ function default_settings() {
     RAM_SIZE="$var_ram"
     BRG="vmbr0"
     NET="dhcp"
-    PORT=""
     GATE=""
     APT_CACHER=""
     APT_CACHER_IP=""
@@ -51,9 +48,9 @@ function default_settings() {
     VLAN=""
     SSH="no"
     VERBOSE="no"
+    echo_default
 }
 
-# Function to install Crafty inside the container
 function install_crafty() {
     msg_info "Installing Crafty in the LXC container"
 
@@ -72,24 +69,32 @@ function install_crafty() {
     msg_ok "Crafty successfully installed"
 }
 
-# Function to start the installation process
-function start() {
-    echo -e "Starting Crafty installation process..."
+function start_crafty() {
+    msg_info "Starting Crafty application"
+    pct exec $CT_ID -- bash -c "systemctl start crafty"
+    msg_ok "Crafty has started"
 }
 
-# Function to build the LXC container
-function build_container() {
-    pct create $CT_ID /var/lib/vz/template/cache/debian-${var_version}-amd64.tar.gz -storage local -net0 name=eth0,bridge=$BRG,ip=$NET
-    pct start $CT_ID
+function update_crafty() {
+    msg_info "Updating Crafty in the LXC container"
+    pct exec $CT_ID -- bash -c "cd /opt/crafty && git pull origin master"
+    pct exec $CT_ID -- bash -c "systemctl restart crafty"
+    msg_ok "Crafty has been updated and restarted"
 }
 
-# Run installation process
-variables
 start
 build_container
 default_settings
+description
+
+# Install Crafty
 install_crafty
 
+# Optionally, update Crafty if needed
+# update_crafty
+
+start_crafty
+
 msg_ok "Completed Successfully!\n"
-echo -e "${APP} should be reachable by going to the following URL: \n"
-echo -e "${BL}http://${IP}:8000${CL} \n"
+echo -e "${APP} should be reachable by going to the following URL.
+         ${BL}http://${IP}:8000${CL} \n"
