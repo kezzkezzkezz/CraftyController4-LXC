@@ -70,7 +70,6 @@ msg_ok "Using CTID: ${BL}$CTID${CL}"
 PCT_OSTYPE="debian-12-standard_12.7-1"
 msg_ok "Using PCT_OSTYPE: ${BL}$PCT_OSTYPE${CL}"
 
-
 # Validate required variables
 [[ "${CTID:-}" ]] || exit "You need to set 'CTID' variable."
 [[ "${PCT_OSTYPE:-}" ]] || exit "You need to set 'PCT_OSTYPE' variable."
@@ -93,7 +92,7 @@ fi
 msg_ok "Using local-lvm as storage."
 
 # Select storage and template (assuming local-lvm is selected directly)
-TEMPLATE_STORAGE="local-lvm"
+TEMPLATE_STORAGE="local"
 msg_ok "Using ${BL}$TEMPLATE_STORAGE${CL} ${GN}for Template Storage."
 
 CONTAINER_STORAGE="local-lvm"
@@ -139,8 +138,9 @@ fi
 # Create LXC container on local-lvm
 msg_info "Creating LXC Container"
 pct create "$CTID" "${TEMPLATE_STORAGE}:vztmpl/${TEMPLATE}" -rootfs "local-lvm:20G" -cores 4 -memory 2048 \
--net0 bridge=vmbr0,name=eth0,ip=dhcp --unprivileged 1 >/dev/null; then
-    echo "ERROR: Failed to create container with CTID ${CTID}."
+-net0 bridge=vmbr0,name=eth0,ip=dhcp --unprivileged 1 >/dev/null
+if [ $? -ne 0 ]; then
+    msg_error "Failed to create container with CTID ${CTID}."
     exit 1
 fi
 msg_ok "LXC Container ${BL}$CTID${CL} ${GN}was successfully created."
