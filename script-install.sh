@@ -176,7 +176,7 @@ pveam update >/dev/null
 msg_ok "Updated LXC Template List"
 
 # Get LXC template string
-TEMPLATE_SEARCH=${PCT_OSTYPE}-${PCT_OSVERSION:-}
+TEMPLATE_SEARCH=${PCT_OSTYPE}${PCT_OSVERSION:+-$PCT_OSVERSION}
 mapfile -t TEMPLATES < <(pveam available -section system | sed -n "s/.*\($TEMPLATE_SEARCH.*\)/\1/p" | sort -t - -k 2 -V)
 [ ${#TEMPLATES[@]} -gt 0 ] || { echo "Unable to find a template when searching for '$TEMPLATE_SEARCH'."; exit 1; }
 
