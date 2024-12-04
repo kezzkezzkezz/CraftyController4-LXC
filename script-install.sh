@@ -135,6 +135,15 @@ else
     msg_ok "Template already exists in storage."
 fi
 
+# Create Logical Volume for container (if not already created)
+msg_info "Creating Logical Volume for container disk"
+lvcreate -L 20G -n "vm-${CTID}-disk-0" local-lvm
+if [ $? -ne 0 ]; then
+    msg_error "Failed to create logical volume 'vm-${CTID}-disk-0'."
+    exit 1
+fi
+msg_ok "Logical volume 'vm-${CTID}-disk-0' created."
+
 # Create LXC container on local-lvm
 msg_info "Creating LXC Container"
 pct create "$CTID" "${TEMPLATE_STORAGE}:vztmpl/${TEMPLATE}" -rootfs "local-lvm:vm-${CTID}-disk-0" -cores 4 -memory 2048 \
