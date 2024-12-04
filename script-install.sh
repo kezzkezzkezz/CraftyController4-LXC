@@ -198,7 +198,7 @@ else
     msg_ok "Template already exists in storage."
 fi
 
-# Build the container
+# Create LXC container on local-lvm
 msg_info "Creating LXC Container"
 if ! pct create "$CTID" "${TEMPLATE_STORAGE}:vztmpl/${TEMPLATE}" -rootfs "local-lvm:20G" -cores 2 -memory 2048 \
 -net0 bridge=vmbr0,name=eth0,ip=dhcp --password "$(openssl rand -base64 12)" --unprivileged 1 >/dev/null; then
@@ -206,4 +206,5 @@ if ! pct create "$CTID" "${TEMPLATE_STORAGE}:vztmpl/${TEMPLATE}" -rootfs "local-
     exit 1
 fi
 msg_ok "LXC Container ${BL}$CTID${CL} ${GN}was successfully created."
+
 
