@@ -137,7 +137,7 @@ fi
 
 # Create Logical Volume for container (if not already created)
 msg_info "Creating Logical Volume for container disk"
-lvcreate -L 20G -n "vm-${CTID}-disk-0" local-lvm
+lvcreate -V 20G --name "vm-${CTID}-disk-0" --thin pve/data
 if [ $? -ne 0 ]; then
     msg_error "Failed to create logical volume 'vm-${CTID}-disk-0'."
     exit 1
