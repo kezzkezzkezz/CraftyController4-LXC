@@ -63,13 +63,6 @@ cd crafty-installer-4.0 && ./install_crafty.sh &>/dev/null
 msg_ok "Crafty successfully installed"
 }
 
-msg_info "Starting Craft Controller"
-systemctl start crafty
-msg_ok "Started Craft Controller"
-msg_ok "Updated Successfully"
-exit
-}
-
 start
 build_container
 description
