@@ -60,8 +60,14 @@ apt update && apt upgrade -y  &>/dev/null
 apt install -y git openjdk-21-jdk  &>/dev/null
 git clone https://gitlab.com/crafty-controller/crafty-installer-4.0.git  &>/dev/null
 cd crafty-installer-4.0 && ./install_crafty.sh &>/dev/null
-cd /var/opt/minecraft/crafty && ./run_crafty.sh &>/dev/null
 msg_ok "Crafty successfully installed"
+}
+
+msg_info "Starting Craft Controller"
+systemctl start crafty
+msg_ok "Started Craft Controller"
+msg_ok "Updated Successfully"
+exit
 }
 
 start
