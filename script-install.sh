@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
+
 source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/build.func)
 
+# Function definitions
 function default_settings() {
-    CT_TYPE="${CT_TYPE:-1}"  # Initialize CT_TYPE
+    CT_TYPE="${CT_TYPE:-1}"  # Set default container type
     PW=""
     CT_ID=$NEXTID
     HN=$NSAPP
@@ -24,7 +26,6 @@ function default_settings() {
     echo_default
 }
 
-# Define other functions
 function install_crafty() {
     msg_info "Installing Crafty in the LXC container"
     pct exec $CT_ID -- bash -c "apt update && apt upgrade -y"
@@ -34,20 +35,10 @@ function install_crafty() {
     msg_ok "Crafty successfully installed"
 }
 
-# Set up variables
-APP="Crafty"
-var_disk="20"
-var_cpu="2"
-var_ram="2048"
-var_os="debian"
-var_version="12"
-
-# Execute build steps
-variables          # Initialize variables like NEXTID
-default_settings   # Ensure default_settings is defined before this call
-catch_errors       # Error handling
-
-build_container    # Build LXC
-install_crafty     # Install Crafty
+# Main script execution
+variables            # Load default variables
+default_settings     # Call after function is defined
+build_container      # Build LXC
+install_crafty       # Install Crafty
 
 msg_ok "Completed Successfully!"
