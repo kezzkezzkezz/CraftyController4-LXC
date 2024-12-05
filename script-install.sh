@@ -50,9 +50,11 @@ function default_settings() {
     VERBOSE="no"
     echo_default
 }
-
 function install_crafty() {
     msg_info "Installing Crafty in the LXC container"
+
+    # Fix locale issues
+    pct exec $CT_ID -- bash -c "apt install -y locales && locale-gen en_US.UTF-8 && update-locale LANG=en_US.UTF-8"
 
     # Update and upgrade packages in the container
     pct exec $CT_ID -- bash -c "apt update && apt upgrade -y"
