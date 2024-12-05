@@ -16,23 +16,27 @@ EOF
 }
 header_info
 echo -e "Loading..."
-APP="Wastebin"
-var_disk="4"
-var_cpu="1"
-var_ram="1024"
+APP="CraftyController4"
+var_disk="20"
+var_cpu="10"
+var_ram="10024"
 var_os="debian"
 var_version="12"
 variables
 color
 catch_errors
 
-function install_crafty() {
-    msg_info "Installing Crafty in the LXC container"
-    pct exec $CT_ID -- bash -c "apt update && apt upgrade -y"
-    pct exec $CT_ID -- bash -c "apt install -y git openjdk-21-jdk"
-    pct exec $CT_ID -- bash -c "git clone https://gitlab.com/crafty-controller/crafty-installer-4.0.git"
-    pct exec $CT_ID -- bash -c "cd crafty-installer-4.0 && ./install_crafty.sh"
-    msg_ok "Crafty successfully installed"
+function update_script() {
+header_info
+check_container_storage
+check_container_resources
+if [[ ! -d /var/opt/minecraft/crafty ]]; then msg_error "No ${APP} Installation Found!"; exit; fi
+msg_info "Updating $APP LXC"
+apt update && apt upgrade -y  &>/dev/null
+apt install -y git openjdk-21-jdk  &>/dev/null
+git clone https://gitlab.com/crafty-controller/crafty-installer-4.0.git  &>/dev/null
+cd crafty-installer-4.0 && ./install_crafty.sh &>/dev/null
+msg_ok "Crafty successfully installed"
 }
 
 start
@@ -41,6 +45,6 @@ description
 
 msg_ok "Completed Successfully!\n"
 echo -e "${APP} Setup should be reachable by going to the following URL.
-         ${BL}http://${IP}:8088${CL} \n"
+         ${BL}http://${IP}:8000${CL} \n"
 
 msg_ok "Completed Successfully!"
